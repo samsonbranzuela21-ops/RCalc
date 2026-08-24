@@ -1,4 +1,5 @@
 import { ModulesList } from "@/components/modules-list";
+import { BackButton } from "@/components/BackButton";
 
 export default function ModulesPage() {
   return (

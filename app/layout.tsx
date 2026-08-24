@@ -1,11 +1,11 @@
 import "./globals.css";
-import { Providers } from "./providers";
 import "katex/dist/katex.min.css";
-import { ThemeToggle } from "@/components/ThemeToggle";
+
+import { Providers } from "./providers";
 import { SiteHeader } from "@/components/site-header";
 import { SiteFooter } from "@/components/site-footer";
 import { BackButton } from "@/components/BackButton";
-
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 export default function RootLayout({
   children,
@@ -14,18 +14,20 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <SiteHeader />
       <body>
-        <BackButton />
         <Providers>
+          <SiteHeader />
+          <BackButton />
+
           {children}
+
           <div className="fixed bottom-4 left-4 z-50">
             <ThemeToggle />
           </div>
+
+          <SiteFooter />
         </Providers>
       </body>
-      <SiteFooter />
     </html>
   );
 }
-

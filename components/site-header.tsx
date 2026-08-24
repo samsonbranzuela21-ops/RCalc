@@ -5,35 +5,72 @@ const navItems = [
   { label: "Modules", href: "/modules" },
   { label: "Calculators", href: "/calculators" },
   { label: "Examples", href: "/examples" },
+  { label: "References", href: "/references" },
+  { label: "About", href: "/about" },
 ];
 
 export function SiteHeader() {
   return (
-    <header className="sticky top-0 z-50 flex items-center justify-between border-b border-[var(--border)] bg-[var(--bg)] px-8 py-3">
-      <Link href="/" className="flex items-center gap-1.5 text-[12px] font-bold text-[var(--text)]">
-        <img src="/rcalc-icon.svg" alt="RCalc logo" className="h-5 w-5" />
-        <span>
-          <span className="text-[#f5941f]">RC</span>alc
-        </span>
-      </Link>
+    <header
+      className="
+        sticky top-0 z-50
+        border-b border-[#202735]
+        bg-[#090e18]/95
+        backdrop-blur-md
+      "
+    >
+      <div className="mx-auto flex h-12 max-w-[860px] items-center justify-between gap-4 px-5">
+        {/* Logo */}
+        <Link
+          href="/"
+          className="flex flex-shrink-0 items-center gap-1.5 text-[12px] font-bold text-white"
+        >
+          <span className="flex h-5 w-5 items-center justify-center rounded bg-[#ffbd00] text-[11px] font-black text-[#171200]">
+            <img src="/rcalc-icon.svg" alt="RCalc logo" className="h-5 w-5" />
+          </span>
 
-      <nav className="flex gap-6 text-[11px] text-[var(--text-muted)]">
-        {navItems.map((item, i) => (
-          <Link
-            key={item.label}
-            href={item.href}
-            className={i === 0 ? "text-[var(--text)]" : "hover:text-[var(--text)]"}
-          >
-            {item.label}
-          </Link>
-        ))}
-      </nav>
-
-      <div className="flex items-center gap-3 text-[11px] text-[var(--text)]">
-        <Link href="#">Sign In</Link>
-        <Link href="#" className="rounded-md bg-[#f5941f] px-3 py-1.5 text-[11px] font-semibold text-[#1a1300]">
-          Dashboard
+          <span>
+            <span className="text-[#f5941f]">RC</span>alc
+          </span>
         </Link>
+
+        {/* Navigation */}
+        <nav className="hidden items-center gap-5 text-[10px] text-[#77849b] md:flex">
+          {navItems.map((item, index) => (
+            <Link
+              key={item.label}
+              href={item.href}
+              className={
+                index === 0
+                  ? "rounded bg-[#ffbd00]/10 px-2 py-1 font-semibold text-[#ffbd00]"
+                  : "hover:text-white"
+              }
+            >
+              {item.label}
+            </Link>
+          ))}
+        </nav>
+
+        {/* Account actions */}
+        <div className="flex flex-shrink-0 items-center gap-3">
+          <Link
+            href="/signin"
+            className="hidden text-[10px] font-medium text-[#aab3c3] hover:text-white sm:block"
+          >
+            Sign In
+          </Link>
+
+          <Link
+            href="/dashboard"
+            className="
+              rounded-md bg-[#ffbd00] px-3 py-1.5
+              text-[10px] font-bold text-[#171200]
+              hover:bg-[#ffd02c]
+            "
+          >
+            Dashboard
+          </Link>
+        </div>
       </div>
     </header>
   );
