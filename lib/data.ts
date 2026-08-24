@@ -1,5 +1,6 @@
 interface CalculatorItem {
   name: string;
+  description: string;
   icon: string;
   color: string;
   href?: string;
@@ -20,37 +21,108 @@ export const stats = [
 
 export const calculators: CalculatorSection[] = [
   {
-    label: "Beam Design",
-    color: "blue",
+    label: "Analysis",
+    color: "slate",
     items: [
-      { name: "Flexural Beam Design", icon: "", color: "blue", href: "/calculators/flexural-beam-design" },
-      { name: "Shear Design", icon: "", color: "blue", href: "/calculators/shear-capacity-design" },
-      { name: "Deflection Check", icon: "", color: "blue", href: "/calculators/deflection-check" },
+      {
+        name: "Beam Capacity Check",
+        description: "Verify adequacy of existing RC beam section",
+        icon: "✅",
+        color: "slate",
+      },
     ],
   },
   {
-    label: "Column Design",
-    color: "orange",
+    label: "Flexural Design",
+    color: "blue",
     items: [
-      { name: "Axial Load Capacity", icon: "🏛️", color: "orange" },
-      { name: "Biaxial Bending", icon: "🔀", color: "orange" },
-      { name: "Slenderness Check", icon: "📐", color: "orange" },
+      {
+        name: "Cracking Moment",
+        description: "Compute Mcr using modulus of rupture",
+        icon: "📉",
+        color: "blue",
+      },
+      {
+        name: "Rectangular Beam",
+        description: "Design singly reinforced rectangular beam",
+        icon: "▭",
+        color: "blue",
+        href: "/calculators/flexural-beam-design",
+      },
+      {
+        name: "T-Beam Design",
+        description: "Flanged section flexural design",
+        icon: "⊤",
+        color: "blue",
+      },
+      {
+        name: "L-Beam Design",
+        description: "L-shaped flanged section design",
+        icon: "◺",
+        color: "blue",
+      },
+    ],
+  },
+  {
+    label: "Shear Design",
+    color: "teal",
+    items: [
+      {
+        name: "Shear Beam Design",
+        description: "Stirrup spacing and shear capacity",
+        icon: "✂️",
+        color: "teal",
+        href: "/calculators/shear-capacity-design",
+      },
+    ],
+  },
+  {
+    label: "Serviceability",
+    color: "red",
+    items: [
+      {
+        name: "Bar Spacing Check",
+        description: "Verify minimum and maximum bar spacing",
+        icon: "↔",
+        color: "red",
+      },
+      {
+        name: "Deflection Check",
+        description: "Immediate and long-term deflection",
+        icon: "〰️",
+        color: "red",
+        href: "/calculators/deflection-check",
+      },
     ],
   },
   {
     label: "Slab Design",
     color: "green",
     items: [
-      { name: "One-Way Slab", icon: "▭", color: "green" },
-      { name: "Two-Way Slab", icon: "▦", color: "green" },
+      {
+        name: "One-Way Slab Design",
+        description: "Reinforcement for one-way spanning slab",
+        icon: "▤",
+        color: "green",
+      },
     ],
   },
   {
-    label: "Foundation Design",
+    label: "Column Design",
     color: "purple",
     items: [
-      { name: "Isolated Footing", icon: "🧱", color: "purple" },
-      { name: "Combined Footing", icon: "🧩", color: "purple" },
+      {
+        name: "Column Design",
+        description: "Axial load and steel area for RC column",
+        icon: "🏛️",
+        color: "purple",
+      },
+      {
+        name: "Column Interaction Diagram",
+        description: "P-M interaction envelope generation",
+        icon: "📈",
+        color: "purple",
+      },
     ],
   },
 ];
