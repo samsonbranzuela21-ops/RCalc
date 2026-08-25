@@ -1,21 +1,71 @@
 @import "tailwindcss";
 
-@layer base {
-  :root {
-    --bg: #ffffff;
-    --bg-surface: #f5f6fa;
-    --text: #14151a;
-    --text-muted: #6b6d7a;
-    --border: #e2e3ea;
-  }
+/* =========================================================
+   RCALC DARK COLOR SYSTEM
+   ========================================================= */
 
-  .dark {
-    --bg: #0a0a0f;
-    --bg-surface: #12131a;
-    --text: #e8e9ee;
-    --text-muted: #8b8d9b;
-    --border: #23242f;
-  }
+:root {
+  color-scheme: light;
+
+  --bg: #f4f6fa;
+  --bg-surface: #ffffff;
+  --bg-section: #f7f9fc;
+  --bg-hover: #eef3f8;
+  --badge-bg: #e9eef5;
+
+  --text: #18202d;
+  --text-muted: #657289;
+  --text-faint: #8a96a8;
+  --border: #dce3ec;
+
+  --hero-bg: #f7f9fc;
+  --hero-grid: rgba(77, 91, 115, 0.1);
+  --hero-title: #18202d;
+  --hero-description: #657289;
+  --hero-pill-bg: rgba(255, 255, 255, 0.85);
+  --hero-pill-border: #d7dee8;
+
+  --yellow: #e6a900;
+  --blue: #1677db;
+  --purple: #6949e8;
+  --green: #15965b;
+  --teal: #078f89;
+  --orange: #df5a13;
+  --red: #d84343;
+}
+
+/*
+  Keep the same dark design even when the "dark" class is added.
+  This prevents different components from using mismatched colors.
+*/
+.dark {
+  color-scheme: dark;
+
+  --bg: #090e18;
+  --bg-surface: #111722;
+  --bg-section: #0e141e;
+  --bg-hover: #151d2a;
+  --badge-bg: #1a2230;
+
+  --text: #f4f7ff;
+  --text-muted: #77849b;
+  --text-faint: #566176;
+  --border: #252d3b;
+
+  --hero-bg: #0d1018;
+  --hero-grid: rgba(47, 55, 71, 0.42);
+  --hero-title: #ffffff;
+  --hero-description: #aeb5c5;
+  --hero-pill-bg: rgba(21, 25, 35, 0.9);
+  --hero-pill-border: #2a303d;
+
+  --yellow: #ffbd00;
+  --blue: #168cff;
+  --purple: #7555ff;
+  --green: #22c77a;
+  --teal: #12b8b0;
+  --orange: #ff6b1a;
+  --red: #ef5350;
 }
 
 @theme inline {
@@ -25,12 +75,33 @@
   --font-mono: var(--font-geist-mono);
 }
 
+/* =========================================================
+   PAGE
+   ========================================================= */
+
+html {
+  min-height: 100%;
+  background: var(--bg);
+}
+
 body {
+  min-height: 100vh;
+  margin: 0;
   background: var(--bg);
   color: var(--text);
   font-family: Arial, Helvetica, sans-serif;
 }
-/* Text preset system — used by components/PresetText.tsx */
+
+/* Better default selection color */
+::selection {
+  background: rgba(255, 189, 0, 0.25);
+  color: #ffffff;
+}
+
+/* =========================================================
+   TEXT PRESETS
+   ========================================================= */
+
 .preset-text {
   font-size: var(--pt-mobile-size);
   color: var(--pt-mobile-color);
@@ -44,7 +115,12 @@ body {
     font-weight: var(--pt-desktop-weight);
   }
 }
-/* Color preset system — used by components/PresetBox.tsx */
+
+/* =========================================================
+   CARD PRESETS
+   Force preset cards to follow the new website color system.
+   ========================================================= */
+
 .preset-box {
   background: var(--pb-light-bg);
   color: var(--pb-light-text);
@@ -57,7 +133,39 @@ body {
   border-color: var(--pb-dark-border);
 }
 
-/* Global press feedback for phones and other touch-first devices. */
+/* =========================================================
+   COMMON ELEMENTS
+   ========================================================= */
+
+a,
+button {
+  transition:
+    color 150ms ease,
+    background-color 150ms ease,
+    border-color 150ms ease,
+    transform 150ms ease,
+    opacity 150ms ease;
+}
+
+button,
+a {
+  -webkit-tap-highlight-color: transparent;
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid var(--yellow);
+  outline-offset: 2px;
+}
+
+/* =========================================================
+   MOBILE / TOUCH PRESS FEEDBACK
+   Applies to all clickable elements without changing desktop hover.
+   ========================================================= */
+
 @media (hover: none) and (pointer: coarse) {
   :where(
     a[href],
@@ -66,14 +174,8 @@ body {
     summary
   ) {
     touch-action: manipulation;
-    -webkit-tap-highlight-color: color-mix(
-      in srgb,
-      var(--blue, #4d7cff) 22%,
-      transparent
-    );
-    transition:
-      filter 120ms ease-out,
-      transform 120ms ease-out;
+    -webkit-tap-highlight-color: transparent;
+    transition: transform 120ms ease-out;
   }
 
   :where(
@@ -82,8 +184,7 @@ body {
     [role="button"],
     summary
   ):active {
-    filter: brightness(1.14);
-    transform: scale(0.985);
+    transform: translateY(1px) scale(0.985);
   }
 }
 
@@ -105,4 +206,32 @@ body {
   ):active {
     transform: none;
   }
+}
+
+/* =========================================================
+   SCROLLBAR
+   ========================================================= */
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #30394a #090e18;
+}
+
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+*::-webkit-scrollbar-track {
+  background: #090e18;
+}
+
+*::-webkit-scrollbar-thumb {
+  border: 2px solid #090e18;
+  border-radius: 999px;
+  background: #30394a;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: #445066;
 }

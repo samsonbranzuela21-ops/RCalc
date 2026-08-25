@@ -44,7 +44,7 @@ export function CalculatorsList() {
 
         <Link
           href="/calculators"
-          className="ml-auto flex-shrink-0 text-[10px] font-semibold text-[var(--text-muted)] hover:text-[var(--blue)]"
+          className="ml-auto flex-shrink-0 rounded px-1 py-0.5 text-[10px] font-semibold text-[var(--text-muted)] transition-colors duration-150 hover:text-[var(--blue)] active:bg-[var(--bg-hover)] active:text-[var(--blue)]"
         >
           All ›
         </Link>
@@ -85,7 +85,7 @@ export function CalculatorsList() {
                     </PresetText>
                   </div>
 
-                  <span className="ml-auto flex-shrink-0 text-[13px] text-[var(--text-faint)] group-hover:text-[var(--blue)]">
+                  <span className="ml-auto flex-shrink-0 text-[13px] text-[var(--text-faint)] transition-colors duration-150 group-hover:text-[var(--blue)] group-active:text-[var(--blue)]">
                     ›
                   </span>
                 </>
@@ -95,7 +95,7 @@ export function CalculatorsList() {
                 <Link
                   key={item.name}
                   href={item.href}
-                  className="group flex items-center gap-2.5 border-b border-[var(--border)] px-3 py-2.5 last:border-b-0 hover:bg-[var(--bg-hover)] sm:px-4"
+                  className="group flex touch-manipulation select-none items-center gap-2.5 border-b border-[var(--border)] px-3 py-2.5 transition-[background-color,transform] duration-150 ease-out last:border-b-0 hover:bg-[var(--bg-hover)] active:scale-[0.995] active:bg-[var(--bg-hover)] focus-visible:bg-[var(--bg-hover)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-[var(--blue)] motion-reduce:transition-none motion-reduce:transform-none sm:px-4"
                 >
                   {content}
                 </Link>
