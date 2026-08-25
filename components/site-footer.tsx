@@ -20,7 +20,7 @@ export function SiteFooter() {
         </nav>
 
         <p className="text-[10px] text-[var(--text-muted)]">
-          RCalc — undergraduate thesis project, 2025 · NSCP 2015 · ACI 318
+          RCalc — undergraduate thesis project, 2026 · NSCP 2015 · ACI 318
         </p>
       </div>
     </footer>

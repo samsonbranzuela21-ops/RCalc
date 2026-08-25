@@ -40,6 +40,7 @@ export const calculators: CalculatorSection[] = [
         description: "Verify adequacy of existing RC beam section",
         icon: "✅",
         color: "slate",
+        href: "/calculators/beam-capacity-check",
       },
     ],
   },
@@ -65,6 +66,7 @@ export const calculators: CalculatorSection[] = [
         description: "Flanged section flexural design",
         icon: "⊤",
         color: "blue",
+        href: "/calculators/t-beam-design",
       },
       {
         name: "L-Beam Design",
