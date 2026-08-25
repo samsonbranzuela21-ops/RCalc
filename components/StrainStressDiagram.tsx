@@ -121,6 +121,7 @@ function SinglyReinforcedDiagram({
   const panelLabelY = bottom + 55;
 
   return (
+    <div className="w-full overflow-x-auto pb-2 [scrollbar-color:#737373_#171717] [scrollbar-gutter:stable] [scrollbar-width:auto]">
     <svg
       viewBox="0 0 620 380"
       role="img"
@@ -190,6 +191,7 @@ function SinglyReinforcedDiagram({
       </text>
       <text x={forcesX - 26} y={panelLabelY} textAnchor="middle" fontSize="10.5" fontWeight="600" fill="var(--text)">Internal forces</text>
     </svg>
+    </div>
   );
 }
 

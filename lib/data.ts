@@ -18,10 +18,6 @@ interface CalculatorSection {
   items: CalculatorItem[];
 }
 
-/*
- * Only NSCP · ACI 318 is displayed in the hero.
- * It opens the dedicated /nscp-aci-318 page.
- */
 export const stats: StatItem[] = [
   {
     label: "NSCP · ACI 318",
@@ -53,6 +49,7 @@ export const calculators: CalculatorSection[] = [
         description: "Compute Mcr using modulus of rupture",
         icon: "📉",
         color: "blue",
+        href: "/calculators/cracking-moment",
       },
       {
         name: "Rectangular Beam",
@@ -73,6 +70,7 @@ export const calculators: CalculatorSection[] = [
         description: "L-shaped flanged section design",
         icon: "◺",
         color: "blue",
+        href: "/calculators/l-beam-design",
       },
     ],
   },
@@ -144,48 +142,24 @@ export const footerColumns = [
   {
     title: "Product",
     links: [
-      {
-        label: "Calculators",
-        href: "/calculators",
-      },
-      {
-        label: "Modules",
-        href: "/modules",
-      },
-      {
-        label: "Changelog",
-        href: "/changelog",
-      },
+      { label: "Calculators", href: "/calculators" },
+      { label: "Modules", href: "/modules" },
+      { label: "Changelog", href: "/changelog" },
     ],
   },
   {
     title: "Resources",
     links: [
-      {
-        label: "NSCP · ACI 318",
-        href: "/nscp-aci-318",
-      },
-      {
-        label: "References",
-        href: "/references",
-      },
-      {
-        label: "Documentation",
-        href: "/docs",
-      },
+      { label: "NSCP · ACI 318", href: "/nscp-aci-318" },
+      { label: "References", href: "/references" },
+      { label: "Documentation", href: "/docs" },
     ],
   },
   {
     title: "Company",
     links: [
-      {
-        label: "About",
-        href: "/about",
-      },
-      {
-        label: "Contact",
-        href: "/contact",
-      },
+      { label: "About", href: "/about" },
+      { label: "Contact", href: "/contact" },
     ],
   },
 ];
