@@ -13,6 +13,8 @@ interface StrainStressDiagramProps {
   AsPrime?: number;
   numBars?: number;
   numBarsPrime?: number;
+  tensionBarsPerLayer?: number[];
+  compressionBarsPerLayer?: number[];
 }
 
 export function StrainStressDiagram({
@@ -30,6 +32,8 @@ export function StrainStressDiagram({
   AsPrime,
   numBars = 5,
   numBarsPrime = 2,
+  tensionBarsPerLayer,
+  compressionBarsPerLayer,
 }: StrainStressDiagramProps) {
   if (isDoublyReinforced && dPrime) {
     return (
@@ -43,8 +47,11 @@ export function StrainStressDiagram({
         fy={fy}
         As={As}
         AsPrime={AsPrime}
-        numBars={numBars}
-        numBarsPrime={numBarsPrime}
+        tensionBarsPerLayer={normalizeLayerRows(tensionBarsPerLayer, numBars)}
+        compressionBarsPerLayer={normalizeLayerRows(
+          compressionBarsPerLayer,
+          numBarsPrime
+        )}
         compressionSteelYields={compressionSteelYields}
         fsPrime={fsPrime}
       />
@@ -58,7 +65,7 @@ export function StrainStressDiagram({
       c={c}
       a={a}
       fc={fc}
-      numBars={numBars}
+      tensionBarsPerLayer={normalizeLayerRows(tensionBarsPerLayer, numBars)}
     />
   );
 }
@@ -72,14 +79,14 @@ function SinglyReinforcedDiagram({
   c,
   a,
   fc,
-  numBars,
+  tensionBarsPerLayer,
 }: {
   b: number;
   d: number;
   c: number;
   a: number;
   fc: number;
-  numBars: number;
+  tensionBarsPerLayer: number[];
 }) {
   const top = 60;
   const sectionHeight = 190;
@@ -98,7 +105,14 @@ function SinglyReinforcedDiagram({
   const stressW = 56;
   const forcesX = 520;
 
-  const barXs = createBarPositions(numBars, sectionX, sectionW, 10);
+  const tensionRowYs = createLayerRowYs(
+    steelY,
+    tensionBarsPerLayer,
+    "tension"
+  );
+  const tensionBarXs = tensionBarsPerLayer.map((count) =>
+    createBarPositions(count, sectionX, sectionW, 10)
+  );
   const concreteForceY = top + blockHeight / 2;
   const leverArmMidY = (concreteForceY + steelY) / 2;
   const steelPositionTolerance = 1e-9;
@@ -121,7 +135,6 @@ function SinglyReinforcedDiagram({
   const panelLabelY = bottom + 55;
 
   return (
-    <div className="w-full overflow-x-auto pb-2 [scrollbar-color:#737373_#171717] [scrollbar-gutter:stable] [scrollbar-width:auto]">
     <svg
       viewBox="0 0 620 380"
       role="img"
@@ -138,9 +151,17 @@ function SinglyReinforcedDiagram({
       <line x1={sectionX} y1={naY} x2={strainCx + 44} y2={naY} stroke="var(--text-muted)" strokeWidth="1" strokeDasharray="4 3" />
       <text x={sectionX - 6} y={naY + 3} textAnchor="end" fontSize="9" fontWeight="600" fill="var(--text)">N.A.</text>
 
-      {barXs.map((x) => (
-        <circle key={x} cx={x} cy={steelY} r="3.6" fill="var(--text)" />
-      ))}
+      {tensionBarXs.flatMap((row, rowIndex) =>
+        row.map((x, barIndex) => (
+          <circle
+            key={`tension-${rowIndex}-${barIndex}`}
+            cx={x}
+            cy={tensionRowYs[rowIndex]}
+            r="3.6"
+            fill="var(--text)"
+          />
+        ))
+      )}
       <text x={sectionX + sectionW / 2} y={steelY + 18} textAnchor="middle" fontSize="11" fontStyle="italic" fill="var(--text)">Aₛ</text>
 
       <line x1={sectionX - 34} y1={top} x2={sectionX - 34} y2={bottom} stroke="var(--text-muted)" markerStart="url(#dim-arrow)" markerEnd="url(#dim-arrow)" />
@@ -191,7 +212,6 @@ function SinglyReinforcedDiagram({
       </text>
       <text x={forcesX - 26} y={panelLabelY} textAnchor="middle" fontSize="10.5" fontWeight="600" fill="var(--text)">Internal forces</text>
     </svg>
-    </div>
   );
 }
 
@@ -208,8 +228,8 @@ function DoublyReinforcedDiagram({
   fy,
   As,
   AsPrime,
-  numBars,
-  numBarsPrime,
+  tensionBarsPerLayer,
+  compressionBarsPerLayer,
   compressionSteelYields,
   fsPrime,
 }: {
@@ -222,8 +242,8 @@ function DoublyReinforcedDiagram({
   fy?: number;
   As?: number;
   AsPrime?: number;
-  numBars: number;
-  numBarsPrime: number;
+  tensionBarsPerLayer: number[];
+  compressionBarsPerLayer: number[];
   compressionSteelYields?: boolean | null;
   fsPrime?: number | null;
 }) {
@@ -242,17 +262,21 @@ function DoublyReinforcedDiagram({
   // Total width budget: 900, well within the 940-wide viewBox.
   const sectionX = 50;
   const sectionW = 70;
-  const compressionBarXs = createBarPositions(
-    numBarsPrime,
-    sectionX,
-    sectionW,
-    12
+  const compressionRowYs = createLayerRowYs(
+    dPrimeY,
+    compressionBarsPerLayer,
+    "compression"
   );
-  const tensionBarXs = createBarPositions(
-    numBars,
-    sectionX,
-    sectionW,
-    10
+  const tensionRowYs = createLayerRowYs(
+    steelY,
+    tensionBarsPerLayer,
+    "tension"
+  );
+  const compressionBarXs = compressionBarsPerLayer.map((count) =>
+    createBarPositions(count, sectionX, sectionW, 12)
+  );
+  const tensionBarXs = tensionBarsPerLayer.map((count) =>
+    createBarPositions(count, sectionX, sectionW, 10)
   );
 
   const strainCx = 230;
@@ -336,14 +360,30 @@ function DoublyReinforcedDiagram({
       <rect x={sectionX} y={top} width={sectionW} height={Math.max(naY - top, 0)} fill="#4d7cff" fillOpacity="0.12" />
       <line x1={sectionX} y1={naY} x2={strainCx + 40} y2={naY} stroke="var(--text-muted)" strokeWidth="1" strokeDasharray="4 3" />
 
-      {compressionBarXs.map((x) => (
-        <circle key={`top-${x}`} cx={x} cy={dPrimeY} r="3.2" fill="#f5941f" />
-      ))}
+      {compressionBarXs.flatMap((row, rowIndex) =>
+        row.map((x, barIndex) => (
+          <circle
+            key={`top-${rowIndex}-${barIndex}`}
+            cx={x}
+            cy={compressionRowYs[rowIndex]}
+            r="3.2"
+            fill="#f5941f"
+          />
+        ))
+      )}
       <text x={sectionX - 8} y={dPrimeY + 3} textAnchor="end" fontSize="9.5" fill="#f5941f">A′s</text>
 
-      {tensionBarXs.map((x) => (
-        <circle key={`bot-${x}`} cx={x} cy={steelY} r="3.4" fill="var(--text)" />
-      ))}
+      {tensionBarXs.flatMap((row, rowIndex) =>
+        row.map((x, barIndex) => (
+          <circle
+            key={`bot-${rowIndex}-${barIndex}`}
+            cx={x}
+            cy={tensionRowYs[rowIndex]}
+            r="3.4"
+            fill="var(--text)"
+          />
+        ))
+      )}
       <text x={sectionX - 8} y={steelY + 3} textAnchor="end" fontSize="9.5" fill="var(--text)">Aₛ</text>
 
       <line x1={sectionX - 32} y1={top} x2={sectionX - 32} y2={steelY} stroke="var(--text-muted)" markerStart="url(#dim-arrow)" markerEnd="url(#dim-arrow)" />
@@ -545,6 +585,50 @@ function createBarPositions(
       firstBarX +
       ((lastBarX - firstBarX) * index) / (validCount - 1)
   );
+}
+
+function normalizeLayerRows(
+  requestedRows: number[] | undefined,
+  fallbackTotal: number
+): number[] {
+  const total = Math.max(
+    1,
+    Math.floor(Number.isFinite(fallbackTotal) ? fallbackTotal : 1)
+  );
+  const rows = requestedRows
+    ?.map((count) => Math.max(0, Math.floor(count)))
+    .filter((count) => count > 0);
+
+  if (!rows || rows.length === 0) return [total];
+  if (rows.reduce((sum, count) => sum + count, 0) !== total) return [total];
+  return rows.slice(0, 2);
+}
+
+function createLayerRowYs(
+  centroidY: number,
+  barsPerLayer: number[],
+  group: "tension" | "compression"
+): number[] {
+  if (barsPerLayer.length < 2) return [centroidY];
+
+  const firstCount = barsPerLayer[0];
+  const secondCount = barsPerLayer[1];
+  const total = firstCount + secondCount;
+  const rowDistance = 14;
+
+  if (group === "tension") {
+    // First row is the bottom row. Offsets preserve the supplied centroid d.
+    return [
+      centroidY + (secondCount / total) * rowDistance,
+      centroidY - (firstCount / total) * rowDistance,
+    ];
+  }
+
+  // First row is the top row. Offsets preserve the supplied centroid d'.
+  return [
+    centroidY - (secondCount / total) * rowDistance,
+    centroidY + (firstCount / total) * rowDistance,
+  ];
 }
 
 function Defs() {

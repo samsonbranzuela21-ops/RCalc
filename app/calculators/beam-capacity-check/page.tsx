@@ -12,12 +12,113 @@ import {
 
 const barSizes = [12, 16, 20, 25, 28, 32];
 const stirrupSizes = [10, 12, 16];
+type LayerCount = 1 | 2;
+
+interface LayerSpacingCheck {
+  barsPerLayer: number[];
+  clearSpacing: number | null;
+  verticalClearSpacing: number | null;
+  minRequired: number;
+  ok: boolean | null;
+}
+
+function splitBars(totalBars: number, layers: LayerCount): number[] {
+  if (layers === 1) return [totalBars];
+  return [Math.ceil(totalBars / 2), Math.floor(totalBars / 2)];
+}
+
+function calculateLayerSpacing(
+  width: number,
+  cover: number,
+  stirrupDiameter: number,
+  barDiameter: number,
+  totalBars: number,
+  layers: LayerCount
+): LayerSpacingCheck {
+  const barsPerLayer = splitBars(totalBars, layers);
+  const largestRow = Math.max(...barsPerLayer);
+  const minRequired = Math.max(barDiameter, 25);
+  const insideWidth = width - 2 * (cover + stirrupDiameter);
+  const clearSpacing =
+    largestRow > 1
+      ? (insideWidth - largestRow * barDiameter) / (largestRow - 1)
+      : null;
+  const verticalClearSpacing = layers === 2 ? minRequired : null;
+  const horizontalOk =
+    clearSpacing === null ? insideWidth >= barDiameter : clearSpacing >= minRequired;
+  const ok = horizontalOk && (verticalClearSpacing === null || verticalClearSpacing >= minRequired);
+
+  return {
+    barsPerLayer,
+    clearSpacing,
+    verticalClearSpacing,
+    minRequired,
+    ok,
+  };
+}
+
+function tensionSteelCentroidDepth(
+  overallDepth: number,
+  cover: number,
+  stirrupDiameter: number,
+  barDiameter: number,
+  barsPerLayer: number[]
+): number {
+  const bottomRowDepth =
+    overallDepth - cover - stirrupDiameter - barDiameter / 2;
+  if (barsPerLayer.length === 1) return bottomRowDepth;
+
+  const rowDistance = barDiameter + Math.max(barDiameter, 25);
+  const upperRowDepth = bottomRowDepth - rowDistance;
+  const totalBars = barsPerLayer[0] + barsPerLayer[1];
+  return (
+    (barsPerLayer[0] * bottomRowDepth +
+      barsPerLayer[1] * upperRowDepth) /
+    totalBars
+  );
+}
+
+function compressionSteelCentroidDepth(
+  cover: number,
+  stirrupDiameter: number,
+  barDiameter: number,
+  barsPerLayer: number[]
+): number {
+  const topRowDepth = cover + stirrupDiameter + barDiameter / 2;
+  if (barsPerLayer.length === 1) return topRowDepth;
+
+  const rowDistance = barDiameter + Math.max(barDiameter, 25);
+  const lowerRowDepth = topRowDepth + rowDistance;
+  const totalBars = barsPerLayer[0] + barsPerLayer[1];
+  return (
+    (barsPerLayer[0] * topRowDepth +
+      barsPerLayer[1] * lowerRowDepth) /
+    totalBars
+  );
+}
+
+function formatLayerSpacing(check: LayerSpacingCheck): string {
+  const values: string[] = [];
+
+  if (check.clearSpacing !== null) {
+    values.push(`${check.clearSpacing.toFixed(1)} mm horizontal`);
+  }
+  if (check.verticalClearSpacing !== null) {
+    values.push(`${check.verticalClearSpacing.toFixed(0)} mm vertical`);
+  }
+
+  if (values.length === 0) {
+    return check.ok === false ? "NOT OK" : "N/A";
+  }
+
+  return `${values.join("; ")} — ${check.ok ? "OK" : "NOT OK"}`;
+}
 
 export default function BeamCapacityCheckPage() {
   const [b, setB] = useState("300");
   const [fc, setFc] = useState("28");
   const [fy, setFy] = useState("420");
-  const [Mu, setMu] = useState("180");
+  const [Mu, setMu] = useState("");
 
   const [depthMode, setDepthMode] = useState<"direct" | "fromH">("direct");
   const [d, setD] = useState("450");
@@ -28,25 +129,41 @@ export default function BeamCapacityCheckPage() {
 
   const [barDiameter, setBarDiameter] = useState(20);
   const [numBars, setNumBars] = useState("5");
+  const [tensionLayers, setTensionLayers] = useState<LayerCount>(1);
 
   const [isDoubly, setIsDoubly] = useState(false);
   const [barDiameterPrime, setBarDiameterPrime] = useState(16);
   const [numBarsPrime, setNumBarsPrime] = useState("2");
+  const [compressionLayers, setCompressionLayers] = useState<LayerCount>(1);
 
   const [result, setResult] = useState<BeamCapacityResult | null>(null);
   const [steps, setSteps] = useState<BeamCapacitySolutionStep[]>([]);
   const [showSolution, setShowSolution] = useState(false);
   const [computedDepths, setComputedDepths] = useState<{ d: number; dPrime: number } | null>(null);
-  const [spacingCheck, setSpacingCheck] = useState<{ clearSpacing: number | null; minRequired: number; ok: boolean | null } | null>(null);
+  const [spacingCheck, setSpacingCheck] = useState<LayerSpacingCheck | null>(null);
+  const [compressionSpacingCheck, setCompressionSpacingCheck] = useState<LayerSpacingCheck | null>(null);
+  const [inputError, setInputError] = useState("");
 
   function handleCalculate() {
     const bVal = parseFloat(b);
     const fcVal = parseFloat(fc);
     const fyVal = parseFloat(fy);
-    const MuVal = parseFloat(Mu);
+    const MuVal = Mu.trim() === "" ? null : parseFloat(Mu);
     const nBars = parseInt(numBars, 10);
 
-    if ([bVal, fcVal, fyVal, MuVal, nBars].some((v) => isNaN(v) || v <= 0)) {
+    if (
+      [bVal, fcVal, fyVal, nBars].some((v) => isNaN(v) || v <= 0) ||
+      (MuVal !== null && (isNaN(MuVal) || MuVal <= 0))
+    ) {
+      setInputError("Enter positive values. Mu may be left blank.");
+      setResult(null);
+      setSteps([]);
+      setComputedDepths(null);
+      return;
+    }
+
+    if (tensionLayers === 2 && nBars < 2) {
+      setInputError("Two tension-steel layers require at least 2 bars.");
       setResult(null);
       setSteps([]);
       setComputedDepths(null);
@@ -59,6 +176,14 @@ export default function BeamCapacityCheckPage() {
     if (isDoubly) {
       const nBarsPrime = parseInt(numBarsPrime, 10);
       if (isNaN(nBarsPrime) || nBarsPrime <= 0) {
+        setInputError("Enter a valid number of compression bars.");
+        setResult(null);
+        setSteps([]);
+        setComputedDepths(null);
+        return;
+      }
+      if (compressionLayers === 2 && nBarsPrime < 2) {
+        setInputError("Two compression-steel layers require at least 2 bars.");
         setResult(null);
         setSteps([]);
         setComputedDepths(null);
@@ -74,6 +199,7 @@ export default function BeamCapacityCheckPage() {
       dVal = parseFloat(d);
       dPrimeVal = isDoubly ? parseFloat(dPrime) : 0;
       if (isNaN(dVal) || dVal <= 0 || (isDoubly && (isNaN(dPrimeVal) || dPrimeVal <= 0))) {
+        setInputError("Enter valid effective depths.");
         setResult(null);
         setSteps([]);
         setComputedDepths(null);
@@ -83,20 +209,38 @@ export default function BeamCapacityCheckPage() {
       const hVal = parseFloat(h);
       const ccVal = parseFloat(clearCover);
       if ([hVal, ccVal].some((v) => isNaN(v) || v <= 0)) {
+        setInputError("Enter valid values for h and clear cover.");
         setResult(null);
         setSteps([]);
         setComputedDepths(null);
         return;
       }
-      dVal = hVal - ccVal - stirrupDiameter - barDiameter / 2;
-      dPrimeVal = isDoubly ? ccVal + stirrupDiameter + barDiameterPrime / 2 : 0;
-      if (dVal <= 0) {
+      const tensionBarsPerLayer = splitBars(nBars, tensionLayers);
+      dVal = tensionSteelCentroidDepth(
+        hVal,
+        ccVal,
+        stirrupDiameter,
+        barDiameter,
+        tensionBarsPerLayer
+      );
+      dPrimeVal = isDoubly
+        ? compressionSteelCentroidDepth(
+            ccVal,
+            stirrupDiameter,
+            barDiameterPrime,
+            splitBars(parseInt(numBarsPrime, 10), compressionLayers)
+          )
+        : 0;
+      if (dVal <= 0 || (isDoubly && dPrimeVal >= dVal)) {
+        setInputError("The selected layers do not fit within the entered overall depth.");
         setResult(null);
         setSteps([]);
         setComputedDepths(null);
         return;
       }
     }
+
+    setInputError("");
 
     const parsed = {
       b: bVal,
@@ -116,16 +260,30 @@ export default function BeamCapacityCheckPage() {
 
     const cover = depthMode === "fromH" ? parseFloat(clearCover) : 40;
     const stirrup = depthMode === "fromH" ? stirrupDiameter : 10;
-    const minRequired = Math.max(barDiameter, 25);
+    setSpacingCheck(
+      calculateLayerSpacing(
+        bVal,
+        cover,
+        stirrup,
+        barDiameter,
+        nBars,
+        tensionLayers
+      )
+    );
 
-    if (nBars <= 1) {
-      setSpacingCheck({ clearSpacing: null, minRequired, ok: null });
+    if (isDoubly) {
+      setCompressionSpacingCheck(
+        calculateLayerSpacing(
+          bVal,
+          cover,
+          stirrup,
+          barDiameterPrime,
+          parseInt(numBarsPrime, 10),
+          compressionLayers
+        )
+      );
     } else {
-      const edgeToFirstBarCenter = cover + stirrup + barDiameter / 2;
-      const usableWidth = bVal - 2 * edgeToFirstBarCenter;
-      const centerSpacing = usableWidth / (nBars - 1);
-      const clearSpacing = centerSpacing - barDiameter;
-      setSpacingCheck({ clearSpacing, minRequired, ok: clearSpacing >= minRequired });
+      setCompressionSpacingCheck(null);
     }
   }
 
@@ -152,7 +310,7 @@ export default function BeamCapacityCheckPage() {
             <Field label="b — width (mm)" value={b} onChange={setB} />
             <Field label="f'c (MPa)" value={fc} onChange={setFc} />
             <Field label="fy (MPa)" value={fy} onChange={setFy} />
-            <Field label="Mu — applied factored moment (kN·m)" value={Mu} onChange={setMu} />
+            <Field label="Mu — applied factored moment (kN·m), optional" value={Mu} onChange={setMu} />
           </div>
 
           <div className="mt-5 border-t border-[var(--border)] pt-4">
@@ -233,6 +391,11 @@ export default function BeamCapacityCheckPage() {
                   ))}
                 </select>
               </div>
+              <LayerSelect
+                label="Tension steel layers"
+                value={tensionLayers}
+                onChange={setTensionLayers}
+              />
             </div>
           </div>
 
@@ -257,10 +420,21 @@ export default function BeamCapacityCheckPage() {
                     ))}
                   </select>
                 </div>
+                <LayerSelect
+                  label="Compression steel layers"
+                  value={compressionLayers}
+                  onChange={setCompressionLayers}
+                />
               </div>
             </div>
           )}
         </div>
+
+        {inputError && (
+          <div className="mt-3 rounded-md bg-[#e05353]/15 px-3 py-2 text-[11px] font-semibold text-[#e05353]">
+            {inputError}
+          </div>
+        )}
 
         <button
           onClick={handleCalculate}
@@ -273,7 +447,7 @@ export default function BeamCapacityCheckPage() {
           <div className="mt-6 rounded-lg border border-[var(--border)] bg-[var(--bg-surface)] p-4">
             <div
               className={`mb-3 rounded-md px-3 py-2 text-[11px] font-semibold ${
-                result.ok && result.ductilityClass !== "compression-controlled"
+                result.ok !== false && result.ductilityClass !== "compression-controlled"
                   ? "bg-[#39c98a]/15 text-[#39c98a]"
                   : "bg-[#e05353]/15 text-[#e05353]"
               }`}
@@ -297,6 +471,12 @@ export default function BeamCapacityCheckPage() {
                 AsPrime={isDoubly ? parseInt(numBarsPrime, 10) * (Math.PI / 4) * barDiameterPrime * barDiameterPrime : 0}
                 numBars={parseInt(numBars, 10)}
                 numBarsPrime={isDoubly ? parseInt(numBarsPrime, 10) : 0}
+                tensionBarsPerLayer={splitBars(parseInt(numBars, 10), tensionLayers)}
+                compressionBarsPerLayer={
+                  isDoubly
+                    ? splitBars(parseInt(numBarsPrime, 10), compressionLayers)
+                    : []
+                }
               />
             </div>
 
@@ -313,10 +493,20 @@ export default function BeamCapacityCheckPage() {
 
             <ResultRow label="Section type" value={result.isDoublyReinforced ? "Doubly reinforced" : "Singly reinforced"} />
             <ResultRow label="As (tension steel)" value={`${(parseInt(numBars, 10) * (Math.PI / 4) * barDiameter * barDiameter).toFixed(0)} mm² (${numBars} × ${barDiameter}mm)`} />
+            <ResultRow
+              label="Tension-bar arrangement"
+              value={`${splitBars(parseInt(numBars, 10), tensionLayers).join(" + ")} bar(s) — ${tensionLayers} layer(s)`}
+            />
             {isDoubly && (
               <ResultRow
                 label="As' (compression steel)"
                 value={`${(parseInt(numBarsPrime, 10) * (Math.PI / 4) * barDiameterPrime * barDiameterPrime).toFixed(0)} mm² (${numBarsPrime} × ${barDiameterPrime}mm)`}
+              />
+            )}
+            {isDoubly && (
+              <ResultRow
+                label="Compression-bar arrangement"
+                value={`${splitBars(parseInt(numBarsPrime, 10), compressionLayers).join(" + ")} bar(s) — ${compressionLayers} layer(s)`}
               />
             )}
             <ResultRow label="a (stress block depth)" value={`${result.a.toFixed(1)} mm`} />
@@ -332,12 +522,33 @@ export default function BeamCapacityCheckPage() {
             <ResultRow label="φ" value={result.phi.toFixed(3)} />
             <ResultRow label="Mn (nominal capacity)" value={`${result.Mn.toFixed(2)} kN·m`} />
             <ResultRow label="φMn (design capacity)" value={`${result.phiMn.toFixed(2)} kN·m`} bold />
-            <ResultRow label="Mu (applied)" value={`${result.Mu.toFixed(2)} kN·m`} />
-            <ResultRow
-              label="Utilization (Mu / φMn)"
-              value={`${(result.utilizationRatio * 100).toFixed(0)}%`}
-              bold
-            />
+            {result.Mu !== null && result.utilizationRatio !== null && (
+              <>
+                <ResultRow label="Mu (applied)" value={`${result.Mu.toFixed(2)} kN·m`} />
+                <ResultRow
+                  label="Utilization (Mu / φMn)"
+                  value={`${(result.utilizationRatio * 100).toFixed(0)}%`}
+                  bold
+                />
+              </>
+            )}
+            {result.Mu === null && (
+              <ResultRow label="Adequacy check" value="Not performed — Mu was not provided" />
+            )}
+            {spacingCheck && (
+              <ResultRow
+                label="Tension-bar spacing"
+                value={formatLayerSpacing(spacingCheck)}
+                bold
+              />
+            )}
+            {compressionSpacingCheck && (
+              <ResultRow
+                label="Compression-bar spacing"
+                value={formatLayerSpacing(compressionSpacingCheck)}
+                bold
+              />
+            )}
             </div>
           </div>
         )}
@@ -396,6 +607,32 @@ function Field({ label, value, onChange }: { label: string; value: string; onCha
         onChange={(e) => onChange(e.target.value)}
         className="w-full rounded-md border border-[var(--border)] bg-[var(--bg)] px-2 py-1.5 text-[12px] text-[var(--text)]"
       />
+    </div>
+  );
+}
+
+function LayerSelect({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: LayerCount;
+  onChange: (value: LayerCount) => void;
+}) {
+  return (
+    <div>
+      <label className="mb-1 block text-[10px] font-medium text-[var(--text-muted)]">
+        {label}
+      </label>
+      <select
+        value={value}
+        onChange={(event) => onChange(Number(event.target.value) as LayerCount)}
+        className="w-full rounded-md border border-[var(--border)] bg-[var(--bg)] px-2 py-1.5 text-[12px] text-[var(--text)]"
+      >
+        <option value={1}>1 layer</option>
+        <option value={2}>2 layers</option>
+      </select>
     </div>
   );
 }
