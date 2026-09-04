@@ -22,7 +22,6 @@ export const stats: StatItem[] = [
   {
     label: "NSCP · ACI 318",
     color: "text-[var(--green)]",
-    href: "/nscp-aci-318",
   },
 ];
 
@@ -113,26 +112,23 @@ export const calculators: CalculatorSection[] = [
       {
         name: "One-Way Slab Design",
         description: "Reinforcement for one-way spanning slab",
+        href: "/calculators/one-way-slab",
         icon: "▤",
         color: "green",
       },
     ],
   },
   {
-    label: "Column Design",
+    label: "Column Analysis",
     color: "purple",
     items: [
       {
-        name: "Column Design",
-        description: "Axial load and steel area for RC column",
-        icon: "🏛️",
+        name: "Column P-M Interaction",
+        description:
+          "Check short-column capacity under axial load and bending moment",
+        icon: "▥",
         color: "purple",
-      },
-      {
-        name: "Column Interaction Diagram",
-        description: "P-M interaction envelope generation",
-        icon: "📈",
-        color: "purple",
+        href: "/calculators/column-interaction",
       },
     ],
   },
@@ -142,24 +138,48 @@ export const footerColumns = [
   {
     title: "Product",
     links: [
-      { label: "Calculators", href: "/calculators" },
-      { label: "Modules", href: "/modules" },
-      { label: "Changelog", href: "/changelog" },
+      {
+        label: "Calculators",
+        href: "/calculators",
+      },
+      {
+        label: "Modules",
+        href: "/modules",
+      },
+      {
+        label: "Changelog",
+        href: "/changelog",
+      },
     ],
   },
   {
     title: "Resources",
     links: [
-      { label: "NSCP · ACI 318", href: "/nscp-aci-318" },
-      { label: "References", href: "/references" },
-      { label: "Documentation", href: "/docs" },
+      {
+        label: "NSCP · ACI 318",
+        href: "/nscp-aci-318",
+      },
+      {
+        label: "References",
+        href: "/references",
+      },
+      {
+        label: "Documentation",
+        href: "/docs",
+      },
     ],
   },
   {
     title: "Company",
     links: [
-      { label: "About", href: "/about" },
-      { label: "Contact", href: "/contact" },
+      {
+        label: "About",
+        href: "/about",
+      },
+      {
+        label: "Contact",
+        href: "/contact",
+      },
     ],
   },
 ];

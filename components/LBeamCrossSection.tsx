@@ -57,7 +57,7 @@ export function LBeamCrossSection({
   const layers = distributeBars(barsRequired, barsPerLayer);
 
   return (
-    <div className="w-full overflow-x-auto pb-2 [scrollbar-color:#737373_#171717] [scrollbar-gutter:stable] [scrollbar-width:auto]">
+    <div className="w-full overflow-x-auto rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] p-3 sm:p-4 [scrollbar-color:#737373_#171717] [scrollbar-gutter:stable] [scrollbar-width:auto]">
       <svg
         viewBox="0 0 380 345"
         className="mx-auto block h-auto min-w-[350px] max-w-[450px]"

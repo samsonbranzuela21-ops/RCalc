@@ -139,7 +139,7 @@ export function BeamCrossSection({
         : "var(--text)";
 
   return (
-    <div className="flex flex-col items-center">
+    <div className="flex flex-col items-center overflow-x-auto rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] p-3 sm:p-4">
       <svg viewBox={`0 0 ${svgW} ${svgH}`} className="w-full max-w-[280px]">
         <rect
           x={originX}

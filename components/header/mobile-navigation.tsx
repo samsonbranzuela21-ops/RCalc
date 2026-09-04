@@ -1,103 +1,32 @@
-import Link from "next/link";
-
 export type MobilePanel = "modules" | "calculators" | "more" | null;
 
 interface MobileNavigationProps {
-  activePanel: MobilePanel;
-  onNavigate: () => void;
-  onToggle: (panel: Exclude<MobilePanel, null>) => void;
+  isOpen: boolean;
+  onToggle: () => void;
 }
 
-const buttonBase =
-  "flex min-h-9 flex-shrink-0 items-center justify-center gap-1 rounded-md px-1.5 text-[10px] font-semibold active:bg-[var(--bg-hover)]";
-
 export function MobileNavigation({
-  activePanel,
-  onNavigate,
+  isOpen,
   onToggle,
 }: MobileNavigationProps) {
   return (
-    <nav
-      aria-label="Mobile navigation"
-      className="relative flex min-h-10 items-center justify-center gap-1 overflow-x-auto whitespace-nowrap border-t border-[var(--border)] bg-[var(--bg)]/95 px-2 md:hidden"
-    >
-      <Link
-        href="/"
-        onClick={onNavigate}
-        className="flex min-h-9 flex-shrink-0 items-center justify-center rounded-md px-1.5 text-[10px] font-semibold text-[var(--text)] active:bg-[var(--bg-hover)]"
+    <nav aria-label="Mobile navigation" className="md:hidden">
+      <button
+        type="button"
+        aria-label={isOpen ? "Close navigation menu" : "Open navigation menu"}
+        aria-expanded={isOpen}
+        aria-controls="mobile-navigation-panel"
+        aria-haspopup="true"
+        onClick={onToggle}
+        className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-md border border-[var(--border)] bg-[var(--bg-surface)] text-[var(--text)] hover:bg-[var(--bg-hover)]"
       >
-        Home
-      </Link>
-
-      <Separator />
-
-      <MenuButton
-        label="Modules"
-        panel="modules"
-        activePanel={activePanel}
-        onToggle={onToggle}
-      />
-
-      <Separator />
-
-      <MenuButton
-        label="Calculators"
-        panel="calculators"
-        activePanel={activePanel}
-        onToggle={onToggle}
-      />
-
-      <Separator />
-
-      <MenuButton
-        label="More"
-        panel="more"
-        activePanel={activePanel}
-        onToggle={onToggle}
-      />
+        <span className="sr-only">{isOpen ? "Close menu" : "Open menu"}</span>
+        <span aria-hidden="true" className="flex w-4 flex-col gap-1">
+          <span className={`h-0.5 w-full rounded-full bg-current transition-transform ${isOpen ? "translate-y-1.5 rotate-45" : ""}`} />
+          <span className={`h-0.5 w-full rounded-full bg-current transition-opacity ${isOpen ? "opacity-0" : ""}`} />
+          <span className={`h-0.5 w-full rounded-full bg-current transition-transform ${isOpen ? "-translate-y-1.5 -rotate-45" : ""}`} />
+        </span>
+      </button>
     </nav>
-  );
-}
-
-function Separator() {
-  return (
-    <span aria-hidden="true" className="text-[var(--text-faint)]">
-      |
-    </span>
-  );
-}
-
-function MenuButton({
-  label,
-  panel,
-  activePanel,
-  onToggle,
-}: {
-  label: string;
-  panel: Exclude<MobilePanel, null>;
-  activePanel: MobilePanel;
-  onToggle: (panel: Exclude<MobilePanel, null>) => void;
-}) {
-  const isOpen = activePanel === panel;
-
-  return (
-    <button
-      type="button"
-      aria-expanded={isOpen}
-      onClick={() => onToggle(panel)}
-      className={`${buttonBase} ${
-        isOpen ? "text-[var(--blue)]" : "text-[var(--text-muted)]"
-      }`}
-    >
-      {label}
-      <span
-        aria-hidden="true"
-        className={`text-[7px] transition-transform ${
-          isOpen ? "rotate-180" : ""
-        }`}
-      >
-        ▼
-      </span>
-    </button>
   );
 }

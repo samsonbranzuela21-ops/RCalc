@@ -10,28 +10,43 @@ const regularNavItems = [
 ];
 
 interface MobileMenuPanelProps {
+  isOpen: boolean;
   activePanel: MobilePanel;
+  onTogglePanel: (panel: Exclude<MobilePanel, null>) => void;
   onNavigate: () => void;
 }
 
 export function MobileMenuPanel({
+  isOpen,
   activePanel,
+  onTogglePanel,
   onNavigate,
 }: MobileMenuPanelProps) {
-  if (!activePanel) return null;
+  if (!isOpen) return null;
 
   return (
-    <div className="absolute inset-x-0 top-full max-h-[calc(100vh-5.5rem)] overflow-y-auto border-b border-[var(--border)] bg-[var(--bg-surface)] px-3 py-2 shadow-xl md:hidden">
+    <div id="mobile-navigation-panel" role="dialog" aria-label="Mobile navigation menu" className="absolute inset-x-0 top-full z-50 max-h-[calc(100vh-3rem)] overflow-y-auto border-b border-[var(--border)] bg-[var(--bg-surface)] px-3 py-2 shadow-xl md:hidden">
       <div className="mx-auto max-w-[860px]">
-        {activePanel === "modules" && (
-          <ModulesPanel onNavigate={onNavigate} />
-        )}
+        <Link
+          href="/"
+          onClick={onNavigate}
+          className="block rounded-md px-3 py-3 text-[11px] font-semibold text-[var(--text)] active:bg-[var(--bg-hover)]"
+        >
+          Home
+        </Link>
 
-        {activePanel === "calculators" && (
-          <CalculatorsPanel onNavigate={onNavigate} />
-        )}
+        <div className="border-t border-[var(--border)] pt-2">
+          <SubmenuButton label="Modules" open={activePanel === "modules"} onClick={() => onTogglePanel("modules")} />
+          {activePanel === "modules" && <div className="mt-1 border-l-2 border-[var(--blue)] pl-2"><ModulesPanel onNavigate={onNavigate} /></div>}
+        </div>
 
-        {activePanel === "more" && (
+        <div className="mt-2 border-t border-[var(--border)] pt-2">
+          <SubmenuButton label="Calculators" open={activePanel === "calculators"} onClick={() => onTogglePanel("calculators")} />
+          {activePanel === "calculators" && <div className="mt-1 border-l-2 border-[var(--blue)] pl-2"><CalculatorsPanel onNavigate={onNavigate} /></div>}
+        </div>
+
+        <div className="mt-2 border-t border-[var(--border)] pt-2">
+          <p className="px-3 pb-1 pt-1 text-[8px] font-semibold uppercase tracking-[0.14em] text-[var(--text-faint)]">More</p>
           <div className="space-y-1">
             {regularNavItems.map((item) => (
               <Link
@@ -44,9 +59,23 @@ export function MobileMenuPanel({
               </Link>
             ))}
           </div>
-        )}
+        </div>
       </div>
     </div>
+  );
+}
+
+function SubmenuButton({ label, open, onClick }: { label: string; open: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      aria-expanded={open}
+      onClick={onClick}
+      className="flex w-full items-center justify-between rounded-md px-3 py-3 text-left text-[11px] font-semibold text-[var(--text)] hover:bg-[var(--bg-hover)]"
+    >
+      {label}
+      <span aria-hidden="true" className={`text-[9px] text-[var(--text-muted)] transition-transform ${open ? "rotate-180" : ""}`}>▼</span>
+    </button>
   );
 }
 

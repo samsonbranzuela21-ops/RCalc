@@ -163,7 +163,8 @@ export function DeflectionBeamDiagram({
   };
 
   return (
-    <svg viewBox="0 0 360 320" className="mx-auto w-full max-w-[340px]">
+    <div className="overflow-x-auto rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] p-3 sm:p-4">
+      <svg viewBox="0 0 360 320" className="mx-auto w-full max-w-[340px]">
       {/* --- Cracked cross-section --- */}
       <text x={secX + rectW / 2} y={secY - 10} textAnchor="middle" fontSize="10" fill="var(--text-muted)">
         Cracked section — b = {b} mm
@@ -211,6 +212,7 @@ export function DeflectionBeamDiagram({
       <text x={midX} y={beamY + 55} textAnchor="middle" fontSize="9" fill="var(--text-muted)">
         δ(live, immediate) = {deltaL.toFixed(1)} mm
       </text>
-    </svg>
+      </svg>
+    </div>
   );
 }

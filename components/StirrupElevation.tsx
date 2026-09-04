@@ -48,7 +48,7 @@ export function StirrupElevation({
   const svgH = drawH + padding * 2 + (showStirrups ? 45 : 10);
 
   return (
-    <div className="flex flex-col items-center">
+    <div className="flex flex-col items-center overflow-x-auto rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] p-3 sm:p-4">
       <svg viewBox={`0 0 ${svgW} ${svgH}`} className="w-full max-w-[300px]">
         {/* beam elevation outline */}
         <rect

@@ -56,7 +56,7 @@ export function TBeamCrossSection({
   const barRadius = Math.max(3.2, Math.min(5.5, barDiameter / 5));
 
   return (
-    <div className="flex flex-col items-center overflow-x-auto">
+    <div className="flex flex-col items-center overflow-x-auto rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] p-3 sm:p-4">
       <svg
         viewBox="0 0 360 340"
         className="min-w-[330px] w-full max-w-[430px]"

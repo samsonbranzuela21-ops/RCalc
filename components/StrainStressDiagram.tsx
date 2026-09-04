@@ -135,12 +135,13 @@ function SinglyReinforcedDiagram({
   const panelLabelY = bottom + 55;
 
   return (
-    <svg
-      viewBox="0 0 620 380"
-      role="img"
-      aria-label="Singly reinforced section, strain distribution, stress distribution, and internal forces"
-      className="mx-auto block h-auto min-w-[520px] max-w-[820px]"
-    >
+    <div className="overflow-x-auto rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] p-3 sm:p-4">
+      <svg
+        viewBox="0 0 620 380"
+        role="img"
+        aria-label="Singly reinforced section, strain distribution, stress distribution, and internal forces"
+        className="mx-auto block h-auto min-w-[520px] max-w-[820px]"
+      >
       <Defs />
 
       <line x1={sectionX} y1={top - 16} x2={sectionX + sectionW} y2={top - 16} stroke="var(--text-muted)" markerStart="url(#dim-arrow)" markerEnd="url(#dim-arrow)" />
@@ -211,7 +212,8 @@ function SinglyReinforcedDiagram({
             : "Fₛ = 0"}
       </text>
       <text x={forcesX - 26} y={panelLabelY} textAnchor="middle" fontSize="10.5" fontWeight="600" fill="var(--text)">Internal forces</text>
-    </svg>
+      </svg>
+    </div>
   );
 }
 

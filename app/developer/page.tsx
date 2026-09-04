@@ -30,7 +30,7 @@ const developers: Person[] = [
 ];
 
 const adviser: Person = {
-  name: "Engr. Vincent C. Garido",
+  name: "Engr. Mark Vincent C. Garrido",
   photo: "/adviser.jpg",
   program: "Faculty, Civil Engineering Department",
   school: "South East Asian Institute of Technology (SEAIT)",
