@@ -1,3 +1,4 @@
+import { DiagramFrame, DiagramLegend, DiagramSurface, diagramSvgClass } from "@/components/DiagramFrame";
 import type { SupportCondition } from "@/lib/deflection";
 
 interface DeflectionBeamDiagramProps {
@@ -163,8 +164,11 @@ export function DeflectionBeamDiagram({
   };
 
   return (
-    <div className="overflow-x-auto rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] p-3 sm:p-4">
-      <svg viewBox="0 0 360 320" className="mx-auto w-full max-w-[340px]">
+    <DiagramFrame legend={<><DiagramLegend color="#4d7cff" label="Compression / neutral axis" /><DiagramLegend color="#f5941f" label="Reinforcement / deflected shape" /><DiagramLegend color="#39c98a" label="Deflection" /><DiagramLegend color="var(--text-muted)" label="Original beam axis" dashed /></>}>
+      <svg viewBox="0 0 720 280" role="img" aria-label="Cracked beam section and deflected shape" className={diagramSvgClass}>
+      <DiagramSurface width={720} height={280} />
+      <line x1="360" x2="360" y1="20" y2="260" stroke="var(--border)" strokeDasharray="3 5" />
+      <g transform="translate(0 25)">
       {/* --- Cracked cross-section --- */}
       <text x={secX + rectW / 2} y={secY - 10} textAnchor="middle" fontSize="10" fill="var(--text-muted)">
         Cracked section — b = {b} mm
@@ -202,6 +206,8 @@ export function DeflectionBeamDiagram({
         I_cr = {(Icr / 1e6).toFixed(1)} ×10⁶ mm⁴
       </text>
 
+      </g>
+      <g transform="translate(360 -100)">
       {/* --- Deflected shape, per support condition --- */}
       <text x={midX} y={beamY - 40} textAnchor="middle" fontSize="10" fill="var(--text-muted)">
         {conditionLabel[supportCondition]} — L = {L} m (exaggerated)
@@ -212,7 +218,8 @@ export function DeflectionBeamDiagram({
       <text x={midX} y={beamY + 55} textAnchor="middle" fontSize="9" fill="var(--text-muted)">
         δ(live, immediate) = {deltaL.toFixed(1)} mm
       </text>
+      </g>
       </svg>
-    </div>
+    </DiagramFrame>
   );
 }

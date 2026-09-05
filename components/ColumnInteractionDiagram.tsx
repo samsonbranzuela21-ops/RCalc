@@ -1,3 +1,4 @@
+import { DiagramFrame, DiagramLegend as Legend, diagramSvgClass } from "@/components/DiagramFrame";
 import type {
   ColumnInteractionResult,
   InteractionPoint,
@@ -69,12 +70,20 @@ export function ColumnInteractionDiagram({
   );
 
   return (
-    <div className="overflow-x-auto rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] p-3 sm:p-4">
+    <DiagramFrame legend={<>
+        <Legend color="#94a3b8" label="Nominal Pn-Mn" dashed />
+        <Legend color="#8b5cf6" label="Design φPn-φMn" />
+        <Legend
+          color={result.status === "SAFE" ? "#22c55e" : "#ef4444"}
+          label="Applied Pu-Mu"
+          dot
+        />
+       </>}>
       <svg
         role="img"
         aria-label="Nominal and design axial load-moment interaction diagram"
         viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
-        className="h-auto w-full min-w-[560px]"
+        className={diagramSvgClass}
       >
         <rect
           x={MARGIN.left}
@@ -219,41 +228,7 @@ export function ColumnInteractionDiagram({
         </text>
       </svg>
 
-      <div className="flex flex-wrap justify-center gap-4 pt-2 text-[10px] text-[var(--text-muted)]">
-        <Legend color="#94a3b8" label="Nominal Pn-Mn" dashed />
-        <Legend color="#8b5cf6" label="Design φPn-φMn" />
-        <Legend
-          color={result.status === "SAFE" ? "#22c55e" : "#ef4444"}
-          label="Applied Pu-Mu"
-          dot
-        />
-      </div>
-    </div>
-  );
-}
 
-function Legend({
-  color,
-  label,
-  dashed = false,
-  dot = false,
-}: {
-  color: string;
-  label: string;
-  dashed?: boolean;
-  dot?: boolean;
-}) {
-  return (
-    <span className="flex items-center gap-1.5">
-      <span
-        className={dot ? "h-2.5 w-2.5 rounded-full" : "h-0 w-6 border-t-2"}
-        style={{
-          backgroundColor: dot ? color : undefined,
-          borderColor: color,
-          borderStyle: dashed ? "dashed" : "solid",
-        }}
-      />
-      {label}
-    </span>
+    </DiagramFrame>
   );
 }

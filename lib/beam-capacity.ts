@@ -16,6 +16,9 @@ export interface BeamCapacityResult {
   c: number;
   fsPrime: number | null;
   compressionSteelYields: boolean | null;
+  epsilonSPrime: number | null;
+  tensionSteelYields: boolean;
+  tensionStress: number;
   epsilonT: number;
   epsilonY: number;
   phi: number;
@@ -26,6 +29,7 @@ export interface BeamCapacityResult {
   rho: number;
   rhoMin: number;
   rhoMax: number;
+  rhoAdequate: boolean;
   Mn: number;
   phiMn: number;
   Mu: number | null;
@@ -80,11 +84,13 @@ export function checkBeamCapacity(
   const rhoB =
     ((0.85 * fc * beta1) / fy) * (600 / (600 + fy));
   const rhoMax = 0.75 * rhoB;
+  const rhoAdequate = rho >= rhoMin && rho <= rhoMax;
 
   let a: number;
   let c: number;
   let fsPrime: number | null = null;
   let compressionSteelYields: boolean | null = null;
+  let epsilonSPrime: number | null = null;
 
   if (!isDoublyReinforced) {
     a = (As * fy) / (0.85 * fc * b);
@@ -96,6 +102,7 @@ export function checkBeamCapacity(
     const cAssumed = aAssumed / beta1;
     const epsilonSPrimeAssumed =
       (0.003 * (cAssumed - dPrime)) / cAssumed;
+    epsilonSPrime = epsilonSPrimeAssumed;
 
     if (epsilonSPrimeAssumed >= epsilonY) {
       a = aAssumed;
@@ -111,11 +118,14 @@ export function checkBeamCapacity(
       c = (-B + Math.sqrt(discriminant)) / (2 * A);
       a = beta1 * c;
       fsPrime = (ES * 0.003 * (c - dPrime)) / c;
+      epsilonSPrime = (0.003 * (c - dPrime)) / c;
       compressionSteelYields = false;
     }
   }
 
   const epsilonT = (0.003 * (d - c)) / c;
+  const tensionStress = Math.max(-fy, Math.min(fy, ES * epsilonT));
+  const tensionSteelYields = Math.abs(ES * epsilonT) >= fy;
   const { phi, ductilityClass } = phiFromStrain(
     epsilonT,
     epsilonY
@@ -123,7 +133,7 @@ export function checkBeamCapacity(
 
   let MnNmm: number;
   if (!isDoublyReinforced) {
-    MnNmm = As * fy * (d - a / 2);
+    MnNmm = As * tensionStress * (d - a / 2);
   } else {
     const Cc = 0.85 * fc * b * a;
     const CsPrime = AsPrime * ((fsPrime as number) - 0.85 * fc);
@@ -137,14 +147,14 @@ export function checkBeamCapacity(
     Mu !== null && Number.isFinite(Mu) && Mu > 0 ? Mu : null;
   const hasMu = appliedMu !== null;
   const utilizationRatio = hasMu ? appliedMu / phiMn : null;
-  const ok = hasMu ? phiMn >= appliedMu : null;
+  const ok = hasMu ? phiMn >= appliedMu && rhoAdequate : null;
 
   let message: string;
   if (ductilityClass === "compression-controlled") {
     message =
       "Section is compression-controlled (brittle) — not recommended; increase steel ductility or reduce As.";
   } else if (!hasMu) {
-    message = `Design capacity calculated — φMn = ${phiMn.toFixed(1)} kN·m. Enter Mu to perform an adequacy check.`;
+    message = rhoAdequate ? `Design capacity calculated — φMn = ${phiMn.toFixed(1)} kN·m. Enter Mu to perform an adequacy check.` : `Section is INADEQUATE — reinforcement ratio is outside the permitted range.`;
   } else if (!ok) {
     message = `Section is INADEQUATE — φMn (${phiMn.toFixed(1)} kN·m) < Mu (${appliedMu.toFixed(1)} kN·m).`;
   } else {
@@ -158,6 +168,9 @@ export function checkBeamCapacity(
     c,
     fsPrime,
     compressionSteelYields,
+    epsilonSPrime,
+    tensionSteelYields,
+    tensionStress,
     epsilonT,
     epsilonY,
     phi,
@@ -165,6 +178,7 @@ export function checkBeamCapacity(
     rho,
     rhoMin,
     rhoMax,
+    rhoAdequate,
     Mn,
     phiMn,
     Mu: appliedMu,
@@ -181,6 +195,24 @@ export function getBeamCapacitySolutionSteps(
   const { b, d, dPrime, fc, fy, As, AsPrime } = input;
 
   const steps: BeamCapacitySolutionStep[] = [
+    {
+      label: "Given data and section classification",
+      formula: "b,\ d,\ d',\ f'_c,\ f_y,\ A_s,\ A'_s,\ E_s=200{,}000\\text{ MPa}",
+      substitution: `b=${b}\\text{ mm},\\ d=${d}\\text{ mm},\\ d'=${dPrime}\\text{ mm},\\ f'_c=${fc}\\text{ MPa},\\ f_y=${fy}\\text{ MPa},\\ A_s=${As}\\text{ mm}^2,\\ A'_s=${AsPrime}\\text{ mm}^2`,
+      result: r.isDoublyReinforced ? "Doubly reinforced section: top compression steel and bottom tension steel." : "Singly reinforced section: bottom tension steel only.",
+    },
+    {
+      label: "Steel yield strain",
+      formula: "\\varepsilon_y=\\dfrac{f_y}{E_s}",
+      substitution: `\\varepsilon_y=\\dfrac{${fy}}{200000}`,
+      result: `\\varepsilon_y=${r.epsilonY.toFixed(6)}`,
+    },
+    {
+      label: "Tension steel area and reinforcement ratio checks",
+      formula: "\\rho=\\dfrac{A_s}{bd},\\quad \\rho_{min}=\\max\\left(\\dfrac{1.4}{f_y},\\dfrac{\\sqrt{f'_c}}{4f_y}\\right),\\quad \\rho_{max}=0.75\\rho_b",
+      substitution: `\\rho=\\dfrac{${As}}{(${b})(${d})}=${r.rho.toFixed(6)},\\quad \\rho_{min}=${r.rhoMin.toFixed(6)},\\quad \\rho_{max}=${r.rhoMax.toFixed(6)}`,
+      result: `\\rho_{min}\\le\\rho\\le\\rho_{max}: ${r.rho >= r.rhoMin && r.rho <= r.rhoMax ? "PASS" : "FAIL"}`,
+    },
     {
       label: "β1 factor",
       formula:
@@ -225,8 +257,8 @@ export function getBeamCapacitySolutionSteps(
           "\\varepsilon_s' = \\dfrac{0.003(c-d')}{c} \\ ; \\ \\text{yields if } \\varepsilon_s' \\ge \\varepsilon_y",
         substitution: `d' = ${dPrime} \\text{ mm}, \\quad \\varepsilon_y = ${r.epsilonY.toFixed(5)}`,
         result: r.compressionSteelYields
-          ? `\\text{Compression steel YIELDS} \\Rightarrow f_s' = f_y = ${fy} \\text{ MPa}`
-          : `\\text{Compression steel does NOT yield} \\Rightarrow f_s' = ${r.fsPrime?.toFixed(1)} \\text{ MPa (recomputed via quadratic)}`,
+          ? `\\varepsilon_s'=${r.epsilonSPrime?.toFixed(6)}\\ge\\varepsilon_y\\Rightarrow\\text{TOP COMPRESSION STEEL YIELDS},\\ f_s'=f_y=${fy}\\text{ MPa}`
+          : `\\varepsilon_s'=${r.epsilonSPrime?.toFixed(6)}<\\varepsilon_y\\Rightarrow\\text{TOP COMPRESSION STEEL DOES NOT YIELD},\\ f_s'=${r.fsPrime?.toFixed(1)}\\text{ MPa}`,
       }
     );
   }
@@ -236,7 +268,19 @@ export function getBeamCapacitySolutionSteps(
       label: "Tension steel strain and ductility check",
       formula: "\\varepsilon_t = \\dfrac{0.003(d-c)}{c}",
       substitution: `\\varepsilon_t = \\dfrac{0.003(${d}-${r.c.toFixed(1)})}{${r.c.toFixed(1)}}`,
-      result: `\\varepsilon_t = ${r.epsilonT.toFixed(5)} \\Rightarrow \\text{${r.ductilityClass.toUpperCase().replace("-", " ")}}, \\ \\phi = ${r.phi.toFixed(3)}`,
+      result: `\\varepsilon_t = ${r.epsilonT.toFixed(5)},\\quad f_s=${r.tensionStress.toFixed(1)}\\text{ MPa}\\quad(${r.tensionSteelYields ? "YIELDS" : "DOES NOT YIELD"})`,
+    },
+    {
+      label: "Tension steel yield comparison",
+      formula: "f_s=E_s\\varepsilon_t\\ (|f_s|\\le f_y);\\quad |\\varepsilon_t|\\ge\\varepsilon_y\\Rightarrow\\text{yield}",
+      substitution: `E_s\\varepsilon_t=200000(${r.epsilonT.toFixed(5)})=${r.tensionStress.toFixed(1)}\\text{ MPa},\\quad f_y=${fy}\\text{ MPa}`,
+      result: `${r.tensionSteelYields ? "Tension steel yields at the bottom." : "Tension steel remains elastic at the bottom; capacity stress is limited to the calculated elastic stress."}`,
+    },
+    {
+      label: "Ductility region and strength reduction factor",
+      formula: "\\varepsilon_t\\ge0.005\\Rightarrow\\phi=0.90;\\quad\\varepsilon_t\\le\\varepsilon_y\\Rightarrow\\phi=0.65;\\quad\\text{otherwise transition interpolation}",
+      substitution: `\\varepsilon_t=${r.epsilonT.toFixed(5)},\\quad\\varepsilon_y=${r.epsilonY.toFixed(6)}`,
+      result: `\\text{${r.ductilityClass.toUpperCase().replace("-", " ")}}\\quad\\Rightarrow\\quad\\phi=${r.phi.toFixed(3)}`,
     },
     {
       label: "Nominal moment capacity, Mn",
@@ -247,6 +291,16 @@ export function getBeamCapacitySolutionSteps(
         ? `M_n = 0.85(${fc})(${b})(${r.a.toFixed(1)})\\left(${d}-\\dfrac{${r.a.toFixed(1)}}{2}\\right) + (${AsPrime})(${r.fsPrime?.toFixed(1)}-0.85(${fc}))(${d}-${dPrime})`
         : `M_n = (${As})(${fy})\\left(${d} - \\dfrac{${r.a.toFixed(1)}}{2}\\right)`,
       result: `M_n = ${r.Mn.toFixed(2)} \\text{ kN·m}`,
+    },
+    {
+      label: "Internal force equilibrium and moment components",
+      formula: r.isDoublyReinforced
+        ? "C_c=0.85f'_cba,\\quad C'_s=A'_s(f'_s-0.85f'_c),\\quad T=A_sf_y;\\quad M_n=C_c(d-a/2)+C'_s(d-d')"
+        : "C_c=0.85f'_cba,\\quad T=A_sf_s,\\quad C_c=T;\\quad M_n=T(d-a/2)",
+      substitution: r.isDoublyReinforced
+        ? `C_c=0.85(${fc})(${b})(${r.a.toFixed(1)}),\\quad C'_s=(${AsPrime})(${r.fsPrime?.toFixed(1)}-0.85(${fc})),\\quad T=(${As})(${r.tensionStress.toFixed(1)})`
+        : `C_c=0.85(${fc})(${b})(${r.a.toFixed(1)})=T=(${As})(${r.tensionStress.toFixed(1)})`,
+      result: "Resultant forces and lever arms are included in the nominal moment above; signs follow tension/compression state.",
     },
     {
       label: "Design moment capacity, φMn",

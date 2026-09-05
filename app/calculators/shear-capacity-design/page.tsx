@@ -48,13 +48,13 @@ export default function ShearDesignPage() {
 
   return (
     <div className="min-h-screen bg-[var(--bg)] px-5 py-10 text-[var(--text)]">
-      <div className="mx-auto max-w-[560px]">
-        <h1 className="text-[22px] font-extrabold">Shear Capacity Design</h1>
+      <div className="mx-auto min-w-0 max-w-6xl">
+        <h1 className="text-2xl font-bold">Shear Capacity Design</h1>
         <p className="mt-1 text-[12px] text-[var(--text-muted)]">
           Stirrup design for beam shear — NSCP 2015 strength design method.
         </p>
 
-        <div className="mt-6 grid grid-cols-2 gap-3 rounded-lg border border-[var(--border)] bg-[var(--bg-surface)] p-4">
+        <div className="mt-6 grid grid-cols-2 gap-3 rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] p-4 sm:p-5">
           <Field label="Vu — factored shear (kN)" value={Vu} onChange={setVu} />
           <Field label="b — width (mm)" value={b} onChange={setB} />
           <Field label="d — effective depth (mm)" value={d} onChange={setD} />
@@ -104,7 +104,7 @@ export default function ShearDesignPage() {
         </button>
 
         {result && (
-          <div className="mt-6 rounded-lg border border-[var(--border)] bg-[var(--bg-surface)] p-4">
+          <div className="mt-6 rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] p-4 sm:p-5">
             <div
               className={`mb-3 rounded-md px-3 py-2 text-[11px] font-semibold ${
                 result.ok
@@ -155,7 +155,7 @@ export default function ShearDesignPage() {
             </button>
 
             {showSolution && (
-              <div className="mt-3 space-y-4 rounded-lg border border-[var(--border)] bg-[var(--bg-surface)] p-4">
+              <div className="mt-3 space-y-4 rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] p-4 sm:p-5">
                 {steps.map((step, i) => (
                   <div
                     key={i}

@@ -1,71 +1,49 @@
-import type { OneWaySlabResult, SlabSupportCondition } from "@/lib/one-way-slab";
+import { DiagramFrame, DiagramLegend, diagramSvgClass } from "@/components/DiagramFrame";
+import { useId } from "react";
+import type { SlabProblemResult } from "@/lib/one-way-slab";
 
-export function OneWaySlabDiagram({ result, supportCondition, span, h }: { result: OneWaySlabResult; supportCondition: SlabSupportCondition; span: number; h: number }) {
-  const supports = supportCondition === "cantilever" ? "Fixed support" : supportCondition === "simply-supported" ? "Simple supports" : "Continuous supports";
-  const slabLeft = 110;
-  const slabRight = 610;
-  const slabTop = 92;
-  const slabBottom = 114;
-
-  function PinSupport({ x }: { x: number }) {
-    return <polygon points={`${x},${slabBottom} ${x - 16},${slabBottom + 26} ${x + 16},${slabBottom + 26}`} fill="var(--text-muted)" />;
-  }
-
-  function FixedSupport({ x, side }: { x: number; side: "left" | "right" }) {
-    return (
-      <g>
-        <rect x={side === "left" ? x - 9 : x} y={slabTop - 16} width="9" height="64" fill="var(--text-muted)" />
-        {Array.from({ length: 7 }, (_, index) => {
-          const y = slabTop - 12 + index * 9;
-          return <line key={y} x1={side === "left" ? x - 9 : x + 9} y1={y} x2={side === "left" ? x : x} y2={y + 7} stroke="var(--text-muted)" strokeWidth="1" />;
-        })}
-      </g>
-    );
-  }
-
-  function renderSupports() {
-    switch (supportCondition) {
-      case "cantilever":
-        return <FixedSupport x={slabLeft} side="left" />;
-      case "one-end-continuous":
-        return <><FixedSupport x={slabLeft} side="left" /><PinSupport x={slabRight} /></>;
-      case "both-ends-continuous":
-        return <><FixedSupport x={slabLeft} side="left" /><FixedSupport x={slabRight} side="right" /></>;
-      case "simply-supported":
-      default:
-        return <><PinSupport x={slabLeft} /><PinSupport x={slabRight} /></>;
-    }
-  }
-
+export function OneWaySlabDiagram({ problem: result }: { problem: SlabProblemResult }) {
+  const id = useId().replace(/:/g, "");
+  const { problem } = result;
+  const scale = 550 / (problem.exteriorSpacing + problem.interiorSpacing);
+  const a = 60;
+  const b = a + problem.exteriorSpacing * scale;
+  const c = 610;
+  const beam = Math.max(10, problem.beamWidth / 1000 * scale);
+  const end = result.spans[0].result;
+  const interior = result.spans[1].result;
+  const continues = problem.spanCount > 2;
   return (
-    <div className="overflow-x-auto rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] p-3 sm:p-4">
-      <svg viewBox="0 0 720 270" role="img" aria-label="One-way slab span, loading, and reinforcement diagram" className="mx-auto block h-auto min-w-[560px] max-w-[760px]">
-        <defs>
-          <marker id="slab-load-arrow" markerWidth="7" markerHeight="7" refX="3.5" refY="3.5" orient="auto">
-            <path d="M0,0 L7,3.5 L0,7 Z" fill="#df5a13" />
-          </marker>
-          <marker id="slab-dim-arrow" markerWidth="7" markerHeight="7" refX="3.5" refY="3.5" orient="auto-start-reverse">
-            <path d="M0,3.5 L7,0 L7,7 Z" fill="var(--text-muted)" />
-          </marker>
-        </defs>
-        <text x="360" y="24" textAnchor="middle" fontSize="13" fontWeight="700" fill="var(--text)">1 m design strip — {supports}</text>
-        <line x1="110" y1="85" x2="610" y2="85" stroke="#df5a13" strokeWidth="2" markerEnd="url(#slab-load-arrow)" />
-        {Array.from({ length: 9 }, (_, index) => {
-          const x = 130 + index * 58;
-          return <line key={x} x1={x} y1="45" x2={x} y2="78" stroke="#df5a13" strokeWidth="1.5" markerEnd="url(#slab-load-arrow)" />;
-        })}
-        <text x="360" y="43" textAnchor="middle" fontSize="10" fill="#df5a13">wᵤ = {result.factoredLoad.toFixed(2)} kN/m²</text>
-        <rect x={slabLeft} y={slabTop} width={slabRight - slabLeft} height={slabBottom - slabTop} rx="3" fill="var(--bg)" stroke="var(--text)" strokeWidth="1.5" />
-        <line x1={slabLeft + 10} y1="102" x2={slabRight - 10} y2="102" stroke="#f5941f" strokeWidth="3" />
-        {renderSupports()}
-        <line x1="110" y1="165" x2="610" y2="165" stroke="var(--text-muted)" markerStart="url(#slab-dim-arrow)" markerEnd="url(#slab-dim-arrow)" />
-        <text x="360" y="158" textAnchor="middle" fontSize="10" fill="var(--text-muted)">L = {span.toFixed(2)} m</text>
-        <line x1="635" y1="92" x2="635" y2="114" stroke="var(--text-muted)" markerStart="url(#slab-dim-arrow)" markerEnd="url(#slab-dim-arrow)" />
-        <text x="650" y="106" fontSize="10" fill="var(--text-muted)">h = {h.toFixed(0)} mm</text>
-        <circle cx="360" cy="103" r="4" fill="#f5941f" />
-        <text x="360" y="210" textAnchor="middle" fontSize="11" fontWeight="600" fill="var(--text)">Main bars: {result.spacingProvided.toFixed(0)} mm c/c along span</text>
-        <text x="360" y="230" textAnchor="middle" fontSize="10" fill="var(--text-muted)">Design checks: φMn ≥ Mu and φVc ≥ Vu</text>
-      </svg>
-    </div>
+    <DiagramFrame legend={<><DiagramLegend color="var(--green)" label="Bottom bars" /><DiagramLegend color="var(--purple)" label="Top bars" /><DiagramLegend color="var(--orange)" label="Factored load" /></>}>
+      <h2 className="mb-2 text-sm font-bold">Slab section — like the problem figure</h2>
+      <div className="overflow-x-auto">
+        <svg viewBox="0 0 680 320" role="img" aria-label={`Continuous slab with ${problem.exteriorSpacing} m and ${problem.interiorSpacing} m beam spacings, ${problem.beamWidth} mm beams, and ${result.thickness} mm slab thickness`} className={diagramSvgClass}>
+          <defs>
+            <marker id={`${id}-arrow`} markerWidth="6" markerHeight="6" refX="6" refY="3" orient="auto-start-reverse"><path d="M0,0 L6,3 L0,6 Z" fill="context-stroke" /></marker>
+          </defs>
+          <rect x="12" y="12" width="656" height="292" rx="6" fill="var(--bg)" stroke="var(--border)" />
+          <text x="340" y="34" textAnchor="middle" fontSize="12" fontWeight="600" fill="var(--text)">1 m slab strip · h = {result.thickness} mm · d = {end.d.toFixed(1)} mm</text>
+          <text x="340" y="53" textAnchor="middle" fontSize="10" fill="var(--orange)">wu = {end.stripLoad.toFixed(3)} kN/m (includes slab self-weight)</text>
+          <line x1={a} x2={c} y1="64" y2="64" stroke="var(--orange)" />
+          {Array.from({ length: 12 }, (_, index) => <line key={index} x1={a + index * 50} x2={a + index * 50} y1="64" y2="89" stroke="var(--orange)" markerEnd={`url(#${id}-arrow)`} />)}
+          <path d={`M ${a - beam / 2} 96 H ${continues ? 650 : c + beam / 2} V 120 H ${c + beam / 2} V 156 H ${c - beam / 2} V 120 H ${b + beam / 2} V 156 H ${b - beam / 2} V 120 H ${a + beam / 2} V 156 H ${a - beam / 2} Z`} fill="var(--bg-surface)" stroke="var(--text)" strokeWidth="1.5" />
+          {continues && <path d="M650,95 l-5,6 l10,6 l-5,6 v8" fill="none" stroke="var(--text-muted)" />}
+          <line x1={a + (b - a) * 0.25} x2={a + (b - a) * 0.75} y1="114" y2="114" stroke="var(--green)" strokeWidth="3" />
+          <line x1={b + (c - b) * 0.25} x2={b + (c - b) * 0.75} y1="114" y2="114" stroke="var(--green)" strokeWidth="3" />
+          {problem.endSupport !== "unrestrained" && <line x1={a - beam / 4} x2={a + 70} y1="102" y2="102" stroke="var(--purple)" strokeWidth="3" />}
+          <line x1={b - 70} x2={b + 70} y1="102" y2="102" stroke="var(--purple)" strokeWidth="3" />
+          {(continues || problem.endSupport !== "unrestrained") && <line x1={c - 70} x2={continues ? c + 35 : c + beam / 4} y1="102" y2="102" stroke="var(--purple)" strokeWidth="3" />}
+          {[{ x: a, label: "A" }, { x: b, label: "B" }, { x: c, label: "C" }].map(({ x, label }) => <g key={label}><line x1={x} x2={x} y1="158" y2="217" stroke="var(--text-muted)" strokeDasharray="3 3" /><text x={x} y="174" textAnchor="middle" fontSize="10" fill="var(--text)">{label}</text></g>)}
+          {[{ from: a, to: b, spacing: problem.exteriorSpacing, clear: result.exteriorClear, label: "End span" }, { from: b, to: c, spacing: problem.interiorSpacing, clear: result.interiorClear, label: continues ? "Interior span" : "Second end span" }].map((span) => <g key={span.label}>
+            <line x1={span.from} x2={span.to} y1="207" y2="207" stroke="var(--text-muted)" markerStart={`url(#${id}-arrow)`} markerEnd={`url(#${id}-arrow)`} />
+            <text x={(span.from + span.to) / 2} y="195" textAnchor="middle" fontSize="12" fontWeight="600" fill="var(--text)">{span.spacing} m center to center</text>
+            <text x={(span.from + span.to) / 2} y="238" textAnchor="middle" fontSize="11" fill="var(--text-muted)">{span.label} · clear = {span.clear.toFixed(3)} m</text>
+          </g>)}
+          <text x="340" y="263" textAnchor="middle" fontSize="10" fill="var(--text-muted)">Typical beam width = {problem.beamWidth} mm · beam widths equal</text>
+          <text x="340" y="283" textAnchor="middle" fontSize="10" fill="var(--green)">Bottom bars: end Ø{problem.barDiameter} @ {end.designs[0].spacingProvided} mm · {continues ? "interior" : "second"} Ø{problem.barDiameter} @ {interior.designs[0].spacingProvided} mm</text>
+        </svg>
+      </div>
+      <p className="mt-2 text-xs leading-relaxed text-[var(--text-muted)]">Green = bottom bars. Purple = top bars over supports. {continues ? "The slab continues beyond the section shown." : "The slab ends at A and C."} Bar lengths and beam depths are schematic; spacing recommendations are listed below.</p>
+    </DiagramFrame>
   );
 }

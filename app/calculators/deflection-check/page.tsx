@@ -81,13 +81,13 @@ export default function DeflectionCheckPage() {
 
   return (
     <div className="min-h-screen bg-[var(--bg)] px-5 py-10 text-[var(--text)]">
-      <div className="mx-auto max-w-[560px]">
-        <h1 className="text-[22px] font-extrabold">Deflection Check</h1>
+      <div className="mx-auto min-w-0 max-w-6xl">
+        <h1 className="text-2xl font-bold">Deflection Check</h1>
         <p className="mt-1 text-[12px] text-[var(--text-muted)]">
           Serviceability deflection using Branson&apos;s effective moment of inertia — NSCP 2015 / ACI 318 Table 24.2.2.
         </p>
 
-        <div className="mt-6 grid grid-cols-2 gap-3 rounded-lg border border-[var(--border)] bg-[var(--bg-surface)] p-4">
+        <div className="mt-6 grid grid-cols-2 gap-3 rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] p-4 sm:p-5">
           <Field label="L — span (m)" value={L} onChange={setL} />
           <Field label="b — width (mm)" value={b} onChange={setB} />
           <Field label="h — overall depth (mm)" value={h} onChange={setH} />
@@ -153,7 +153,7 @@ export default function DeflectionCheckPage() {
         </button>
 
         {result && (
-          <div className="mt-6 rounded-lg border border-[var(--border)] bg-[var(--bg-surface)] p-4">
+          <div className="mt-6 rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] p-4 sm:p-5">
             <div
               className={`mb-3 rounded-md px-3 py-2 text-[11px] font-semibold ${
                 result.ok ? "bg-[#39c98a]/15 text-[#39c98a]" : "bg-[#f5941f]/15 text-[#f5941f]"
@@ -175,7 +175,7 @@ export default function DeflectionCheckPage() {
         )}
 
         {result && (
-          <div className="mt-4 rounded-lg border border-[var(--border)] bg-[var(--bg-surface)] p-4">
+          <div className="mt-4 min-w-0">
             <DeflectionBeamDiagram
               L={parseFloat(L)}
               b={parseFloat(b)}
@@ -201,7 +201,7 @@ export default function DeflectionCheckPage() {
             </button>
 
             {showSolution && (
-              <div className="mt-3 space-y-4 rounded-lg border border-[var(--border)] bg-[var(--bg-surface)] p-4">
+              <div className="mt-3 space-y-4 rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] p-4 sm:p-5">
                 {steps.map((step, i) => (
                   <div key={i} className="rounded-md border border-[var(--border)] bg-[var(--bg)] p-3">
                     <div className="flex items-center gap-2">

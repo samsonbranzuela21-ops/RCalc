@@ -1,3 +1,4 @@
+import { DiagramFrame, DiagramLegend, DiagramSurface, diagramSvgClass } from "@/components/DiagramFrame";
 interface StrainStressDiagramProps {
   b: number;
   d: number;
@@ -92,7 +93,7 @@ function SinglyReinforcedDiagram({
   const sectionHeight = 190;
   const bottom = top + sectionHeight;
   const safeD = Math.max(d, 1);
-  const scale = sectionHeight / safeD;
+  const scale = (sectionHeight - 12) / safeD;
 
   const naY = top + Math.min(Math.max(c, 0), safeD) * scale;
   const blockHeight = Math.max(4, Math.min(Math.max(a, 0) * scale, sectionHeight));
@@ -130,18 +131,20 @@ function SinglyReinforcedDiagram({
     bottomSteelState === "tension" ? forcesX - 50 : forcesX;
   const bottomSteelArrowEndX =
     bottomSteelState === "tension" ? forcesX : forcesX - 50;
-  const strainTopX = strainCx - 38;
-  const strainBottomX = strainCx + 38;
+  const strainExtent = Math.max(Math.abs(c), Math.abs(d - c), 1);
+  const strainTopX = strainCx - 38 * c / strainExtent;
+  const strainBottomX = strainCx + 38 * (d - c) / strainExtent;
   const panelLabelY = bottom + 55;
 
   return (
-    <div className="overflow-x-auto rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] p-3 sm:p-4">
+    <DiagramFrame legend={<StrainLegend />}>
       <svg
         viewBox="0 0 620 380"
         role="img"
         aria-label="Singly reinforced section, strain distribution, stress distribution, and internal forces"
-        className="mx-auto block h-auto min-w-[520px] max-w-[820px]"
+        className={diagramSvgClass}
       >
+      <DiagramSurface width={620} height={380} />
       <Defs />
 
       <line x1={sectionX} y1={top - 16} x2={sectionX + sectionW} y2={top - 16} stroke="var(--text-muted)" markerStart="url(#dim-arrow)" markerEnd="url(#dim-arrow)" />
@@ -175,10 +178,10 @@ function SinglyReinforcedDiagram({
       <line x1={strainCx} y1={top} x2={strainCx} y2={bottom} stroke="var(--text)" strokeWidth="1.2" />
       <line x1={strainTopX} y1={top} x2={strainBottomX} y2={steelY} stroke="var(--text)" strokeWidth="2" />
       <circle cx={strainCx} cy={naY} r="2" fill="var(--text)" />
-      <line x1={strainTopX} y1={top} x2={strainCx} y2={top} stroke="var(--text-muted)" strokeWidth="1" />
+      <DistributionArrow from={strainCx} to={strainTopX} y={top} state="compression" />
       <text x={strainTopX - 6} y={top - 10} textAnchor="end" fontSize="10.5" fill="var(--text)">εc = 0.003</text>
-      <line x1={strainCx} y1={steelY} x2={strainBottomX} y2={steelY} stroke="var(--text-muted)" strokeWidth="1" />
-      <text x={strainBottomX + 6} y={steelY + 4} textAnchor="start" fontSize="10.5" fill="var(--text)">εt ≥ 0.005</text>
+      <DistributionArrow from={strainCx} to={strainBottomX} y={steelY} state={bottomSteelState} />
+      <text x={strainBottomX + 6} y={steelY + 4} textAnchor="start" fontSize="10.5" fill="var(--text)">εs = {c > 0 ? (0.003 * (d - c) / c).toFixed(4) : "—"}</text>
       <line x1={strainCx - 50} y1={top} x2={strainCx - 50} y2={naY} stroke="var(--text-muted)" markerStart="url(#dim-arrow)" markerEnd="url(#dim-arrow)" />
       <text x={strainCx - 56} y={(top + naY) / 2 + 3} textAnchor="end" fontSize="10.5" fontStyle="italic" fill="var(--text)">c</text>
       <text x={strainCx} y={panelLabelY} textAnchor="middle" fontSize="10.5" fontWeight="600" fill="var(--text)">Strain distribution</text>
@@ -189,12 +192,12 @@ function SinglyReinforcedDiagram({
       <rect x={stressX} y={top} width={stressW} height={blockHeight} fill="none" stroke="var(--text)" strokeWidth="1.5" />
       {Array.from({ length: 4 }, (_, i) => {
         const y = top + ((i + 0.5) * blockHeight) / 4;
-        return <line key={i} x1={stressX} y1={y} x2={stressX + stressW} y2={y} stroke="var(--text)" strokeWidth="1" />;
+        return <DistributionArrow key={i} from={stressX + stressW} to={stressX} y={y} state="compression" concrete />;
       })}
       <line x1={stressX - 16} y1={top} x2={stressX - 16} y2={top + blockHeight} stroke="var(--text-muted)" markerStart="url(#dim-arrow)" markerEnd="url(#dim-arrow)" />
       <text x={stressX - 22} y={top + blockHeight / 2 + 3} textAnchor="end" fontSize="10.5" fill="var(--text)">a = β₁c</text>
-      <rect x={stressX} y={steelY - 6} width={stressW} height="6" fill="#e05a5a" opacity="0.75" />
-      <text x={stressX + stressW / 2} y={steelY + 18} textAnchor="middle" fontSize="10.5" fill="var(--text)">fₛ = fy</text>
+      <DistributionArrow from={bottomSteelState === "compression" ? stressX + stressW : stressX} to={bottomSteelState === "compression" ? stressX : stressX + stressW} y={steelY} state={bottomSteelState} />
+      <text x={stressX + stressW / 2} y={steelY + 18} textAnchor="middle" fontSize="10.5" fill="var(--text)">{bottomSteelState === "zero" ? "fₛ = 0" : bottomSteelState === "compression" ? "fₛ (compression)" : "fₛ (tension)"}</text>
       <text x={stressX + stressW / 2} y={panelLabelY} textAnchor="middle" fontSize="10.5" fontWeight="600" fill="var(--text)">Stress distribution</text>
 
       <line x1={forcesX} y1={concreteForceY} x2={forcesX - 50} y2={concreteForceY} stroke="#4d7cff" strokeWidth="1.8" markerEnd="url(#force-blue)" />
@@ -213,7 +216,7 @@ function SinglyReinforcedDiagram({
       </text>
       <text x={forcesX - 26} y={panelLabelY} textAnchor="middle" fontSize="10.5" fontWeight="600" fill="var(--text)">Internal forces</text>
       </svg>
-    </div>
+    </DiagramFrame>
   );
 }
 
@@ -253,7 +256,7 @@ function DoublyReinforcedDiagram({
   const sectionHeight = 200;
   const bottom = top + sectionHeight;
   const safeD = Math.max(d, 1);
-  const scale = sectionHeight / safeD;
+  const scale = (sectionHeight - 12) / safeD;
 
   const naY = top + Math.min(Math.max(c, 0), safeD) * scale;
   const dPrimeY = top + Math.min(Math.max(dPrime, 0), safeD) * scale;
@@ -296,8 +299,9 @@ function DoublyReinforcedDiagram({
   const aX = 615;
   const aW = 46;
 
-  const strainTopX = strainCx - 34;
-  const strainBottomX = strainCx + 34;
+  const strainExtent = Math.max(Math.abs(c), Math.abs(d - c), 1);
+  const strainTopX = strainCx - 34 * c / strainExtent;
+  const strainBottomX = strainCx + 34 * (d - c) / strainExtent;
   const strainXatY = (y: number) => strainTopX + ((strainBottomX - strainTopX) * (y - top)) / (steelY - top);
 
   const captionY = bottom + 30;
@@ -323,13 +327,13 @@ function DoublyReinforcedDiagram({
         : "zero";
 
   const upperSteelColor =
-    upperSteelState === "tension" ? "#4d7cff" : "#f5941f";
+    upperSteelState === "tension" ? "#e05a5a" : "#f5941f";
   const lowerSteelColor =
-    lowerSteelState === "tension" ? "#4d7cff" : "#f5941f";
+    lowerSteelState === "tension" ? "#e05a5a" : "#f5941f";
   const upperSteelMarker =
-    upperSteelState === "tension" ? "url(#force-blue)" : "url(#force-orange)";
+    upperSteelState === "tension" ? "url(#force-red)" : "url(#force-orange)";
   const lowerSteelMarker =
-    lowerSteelState === "tension" ? "url(#force-blue)" : "url(#force-orange)";
+    lowerSteelState === "tension" ? "url(#force-red)" : "url(#force-orange)";
 
   const upperForceLabel =
     upperSteelState === "tension"
@@ -345,13 +349,14 @@ function DoublyReinforcedDiagram({
         : "Fₛ = 0";
 
   return (
-    <div className="w-full overflow-x-auto pb-2 [scrollbar-color:#737373_#171717] [scrollbar-gutter:stable] [scrollbar-width:auto]">
+    <DiagramFrame legend={<StrainLegend />}>
     <svg
       viewBox="0 0 900 420"
       role="img"
       aria-label="Doubly reinforced section, strain distribution, and stress diagram decomposition"
-      className="block h-auto w-[900px] min-w-[900px] max-w-none"
+      className="block h-auto w-full min-w-[760px]"
     >
+      <DiagramSurface width={900} height={420} />
       <Defs />
 
       {/* ---- (a) Beam cross-section ---- */}
@@ -398,14 +403,14 @@ function DoublyReinforcedDiagram({
       {/* ---- (b) Strain diagram ---- */}
       <line x1={strainCx} y1={top} x2={strainCx} y2={bottom} stroke="var(--text)" strokeWidth="1.2" />
       <line x1={strainTopX} y1={top} x2={strainBottomX} y2={steelY} stroke="var(--text)" strokeWidth="2" />
-      <line x1={strainTopX} y1={top} x2={strainCx} y2={top} stroke="var(--text-muted)" strokeWidth="1" />
-      <line x1={strainCx} y1={steelY} x2={strainBottomX} y2={steelY} stroke="var(--text-muted)" strokeWidth="1" />
+      <DistributionArrow from={strainCx} to={strainTopX} y={top} state="compression" />
+      <DistributionArrow from={strainCx} to={strainBottomX} y={steelY} state={lowerSteelState} />
       <circle cx={strainCx} cy={naY} r="2" fill="var(--text)" />
 
       <text x={strainTopX - 4} y={top - 10} textAnchor="end" fontSize="10" fill="var(--text)">εcu = 0.003</text>
 
       <circle cx={strainXatY(dPrimeY)} cy={dPrimeY} r="2" fill="#f5941f" />
-      <line x1={strainXatY(dPrimeY)} y1={dPrimeY} x2={strainCx} y2={dPrimeY} stroke="#f5941f" strokeWidth="0.8" strokeDasharray="2 2" />
+      <DistributionArrow from={strainCx} to={strainXatY(dPrimeY)} y={dPrimeY} state={upperSteelState} />
       <text x={strainXatY(dPrimeY) - 6} y={dPrimeY - 4} textAnchor="end" fontSize="9.5" fill="#f5941f">ε′s</text>
 
       <text x={strainBottomX + 6} y={steelY + 4} fontSize="10" fill="var(--text)">εs</text>
@@ -423,7 +428,7 @@ function DoublyReinforcedDiagram({
       <rect x={combinedX} y={top} width={combinedW} height={blockHeight} fill="none" stroke="var(--text)" strokeWidth="1.5" />
       {Array.from({ length: 3 }, (_, i) => {
         const y = top + ((i + 0.5) * blockHeight) / 3;
-        return <line key={i} x1={combinedX} y1={y} x2={combinedX + combinedW} y2={y} stroke="var(--text)" strokeWidth="0.9" />;
+        return <DistributionArrow key={i} from={combinedX + combinedW} to={combinedX} y={y} state="compression" concrete />;
       })}
       <text x={combinedX - 6} y={top + blockHeight / 2 + 3} textAnchor="end" fontSize="9.5" fontStyle="italic" fill="var(--text)">a</text>
 
@@ -506,6 +511,7 @@ function DoublyReinforcedDiagram({
       <text x={aX + aW / 2} y={top - 22} textAnchor="middle" fontSize="9.5" fill="var(--text)">0.85f′c = {(0.85 * fc).toFixed(1)} MPa</text>
 
       <rect x={aX} y={top} width={aW} height={blockHeight} fill="none" stroke="var(--text)" strokeWidth="1.5" />
+      {Array.from({ length: 3 }, (_, i) => <DistributionArrow key={i} from={aX + aW} to={aX} y={top + (i + 0.5) * blockHeight / 3} state="compression" concrete />)}
       <line x1={aX - 14} y1={top} x2={aX - 14} y2={top + blockHeight} stroke="var(--text-muted)" markerStart="url(#dim-arrow)" markerEnd="url(#dim-arrow)" />
       <text x={aX - 20} y={top + blockHeight / 2 + 3} textAnchor="end" fontSize="9.5" fontStyle="italic" fill="var(--text)">a</text>
 
@@ -560,7 +566,7 @@ function DoublyReinforcedDiagram({
         {asMinusAsPrimeLabel}
       </text>
     </svg>
-    </div>
+    </DiagramFrame>
   );
 }
 
@@ -650,4 +656,19 @@ function Defs() {
       </marker>
     </defs>
   );
+}
+
+function StrainLegend() {
+  return <><DiagramLegend color="var(--text)" label="Section and strain" /><DiagramLegend color="#4d7cff" label="← Concrete compression" /><DiagramLegend color="#f5941f" label="← Compression steel" /><DiagramLegend color="#e05a5a" label="Tension →" /><DiagramLegend color="var(--text-muted)" label="Neutral axis / dimensions" dashed /></>;
+}
+
+function DistributionArrow({ from, to, y, state, concrete = false }: { from: number; to: number; y: number; state: "tension" | "compression" | "zero"; concrete?: boolean }) {
+  if (state === "zero" || Math.abs(to - from) < 0.001) return null;
+  const color = concrete ? "#4d7cff" : state === "tension" ? "#e05a5a" : "#f5941f";
+  const head = Math.min(5, Math.abs(to - from) / 2);
+  const base = to + (to < from ? head : -head);
+  return <g data-stress-state={state} aria-label={`${concrete ? "Concrete " : ""}${state} arrow`}>
+    <line x1={from} x2={to} y1={y} y2={y} stroke={color} strokeWidth="1.4" />
+    <path d={`M ${to} ${y} L ${base} ${y - 2.5} L ${base} ${y + 2.5} Z`} fill={color} />
+  </g>;
 }

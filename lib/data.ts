@@ -91,12 +91,6 @@ export const calculators: CalculatorSection[] = [
     color: "red",
     items: [
       {
-        name: "Bar Spacing Check",
-        description: "Verify minimum and maximum bar spacing",
-        icon: "↔",
-        color: "red",
-      },
-      {
         name: "Deflection Check",
         description: "Immediate and long-term deflection",
         icon: "〰️",
@@ -111,8 +105,8 @@ export const calculators: CalculatorSection[] = [
     items: [
       {
         name: "One-Way Slab Design",
-        description: "Reinforcement for one-way spanning slab",
-        href: "/calculators/one-way-slab",
+        description: "Design reinforcement for a one-way reinforced-concrete slab",
+        href: "/calculators/one-way-slab-design",
         icon: "▤",
         color: "green",
       },
@@ -129,6 +123,14 @@ export const calculators: CalculatorSection[] = [
         icon: "▥",
         color: "purple",
         href: "/calculators/column-interaction",
+      },
+      {
+        name: "Column Ties and Spiral Check",
+        description:
+          "Check column ties, spacing, and spiral reinforcement detailing",
+        icon: "▥",
+        color: "red",
+        href: "/calculators/column-ties-check",
       },
     ],
   },

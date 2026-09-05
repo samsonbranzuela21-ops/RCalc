@@ -1,3 +1,4 @@
+import { DiagramFrame, diagramSvgClass } from "@/components/DiagramFrame";
 import type {
   BendingDirection,
   CrackingSectionMode,
@@ -74,16 +75,30 @@ export function CrackingMomentDiagram({
 
   const tensionAtBottom =
     direction === "positive";
+  const compressionFaceY = tensionAtBottom ? top : bottom;
+  const compressionDepth = tensionAtBottom
+    ? neutralAxisFromTop
+    : sectionDepth - neutralAxisFromTop;
 
   return (
-    <div className="w-full overflow-x-auto rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] p-3 sm:p-4 [scrollbar-color:#737373_#171717] [scrollbar-gutter:stable] [scrollbar-width:auto]">
+    <DiagramFrame>
       <svg
-        viewBox="0 0 400 315"
-        className="mx-auto block h-auto min-w-[370px] max-w-[470px]"
+        viewBox="0 0 720 430"
+        className={diagramSvgClass}
         role="img"
         aria-label={`${direction} bending transformed section and stress distribution at cracking`}
       >
         <defs>
+          <marker
+            id="cracking-stress-arrow"
+            markerWidth="6"
+            markerHeight="6"
+            refX="6"
+            refY="3"
+            orient="auto"
+          >
+            <path d="M0,0 L6,3 L0,6 Z" fill="context-stroke" />
+          </marker>
           <marker
             id="cracking-dim-arrow"
             markerWidth="7"
@@ -116,250 +131,304 @@ export function CrackingMomentDiagram({
           </pattern>
         </defs>
 
-        {/* Width dimension */}
-        <line
-          x1={sectionX}
-          y1="22"
-          x2={sectionX + sectionW}
-          y2="22"
-          stroke="var(--text-muted)"
-          markerStart="url(#cracking-dim-arrow)"
-          markerEnd="url(#cracking-dim-arrow)"
-        />
-
-        <text
-          x={sectionX + sectionW / 2}
-          y="14"
-          textAnchor="middle"
-          fontSize="10"
-          fill="var(--text-muted)"
-        >
-          {mode === "rectangle"
-            ? `b = ${(b ?? 0).toFixed(0)} mm`
-            : "Custom section"}
-        </text>
-
-        {/* Concrete section */}
         <rect
-          x={sectionX}
-          y={top}
-          width={sectionW}
-          height={sectionH}
-          fill="var(--bg-surface)"
-          stroke="var(--text)"
-          strokeWidth="2"
+          x="28"
+          y="28"
+          width="664"
+          height="348"
+          rx="6"
+          fill="var(--bg)"
+          stroke="var(--border)"
         />
 
-        {/* Tension region */}
-        <rect
-          x={sectionX}
-          y={
-            tensionAtBottom
-              ? neutralAxisY
-              : top
-          }
-          width={sectionW}
-          height={
-            tensionAtBottom
-              ? bottom - neutralAxisY
-              : neutralAxisY - top
-          }
-          fill="url(#cracking-hatch)"
-        />
+        <g transform="translate(160 40)">
+          {/* Width dimension */}
+          <line
+            x1={sectionX}
+            y1="22"
+            x2={sectionX + sectionW}
+            y2="22"
+            stroke="var(--text-muted)"
+            markerStart="url(#cracking-dim-arrow)"
+            markerEnd="url(#cracking-dim-arrow)"
+          />
 
-        {/* Tension steel */}
-        {mode === "rectangle" &&
-          tensionY !== null && (
-            <SteelLayer
-              y={tensionY}
-              color="#e05a5a"
-              label="As"
-            />
+          <text
+            x={sectionX + sectionW / 2}
+            y="14"
+            textAnchor="middle"
+            fontSize="10"
+            fill="var(--text-muted)"
+          >
+            {mode === "rectangle"
+              ? `b = ${(b ?? 0).toFixed(0)} mm`
+              : "Custom section"}
+          </text>
+
+          {/* Concrete section */}
+          <rect
+            x={sectionX}
+            y={top}
+            width={sectionW}
+            height={sectionH}
+            fill="var(--bg-surface)"
+            stroke="var(--text)"
+            strokeWidth="2"
+          />
+
+          {/* Tension region */}
+          <rect
+            x={sectionX}
+            y={
+              tensionAtBottom
+                ? neutralAxisY
+                : top
+            }
+            width={sectionW}
+            height={
+              tensionAtBottom
+                ? bottom - neutralAxisY
+                : neutralAxisY - top
+            }
+            fill="url(#cracking-hatch)"
+          />
+
+          {/* Tension steel */}
+          {mode === "rectangle" &&
+            tensionY !== null && (
+              <SteelLayer
+                y={tensionY}
+                color="#e05a5a"
+                label="As"
+              />
+            )}
+
+          {/* Compression steel */}
+          {mode === "rectangle" &&
+            compressionY !== null && (
+              <SteelLayer
+                y={compressionY}
+                color="#4d7cff"
+                label="As'"
+              />
+            )}
+
+          {/* Neutral axis */}
+          <line
+            x1={sectionX - 15}
+            y1={neutralAxisY}
+            x2={tensionX + 30}
+            y2={neutralAxisY}
+            stroke="var(--text-muted)"
+            strokeDasharray="7 5"
+          />
+
+          <text
+            x={sectionX + 5}
+            y={neutralAxisY - 7}
+            textAnchor="start"
+            fontSize="9"
+            fill="var(--text-muted)"
+          >
+            N.A.
+          </text>
+
+          {/* Height dimension */}
+          <line
+            x1="28"
+            y1={top}
+            x2="28"
+            y2={bottom}
+            stroke="var(--text-muted)"
+            markerStart="url(#cracking-dim-arrow)"
+            markerEnd="url(#cracking-dim-arrow)"
+          />
+
+          <text
+            x="20"
+            y={(top + bottom) / 2}
+            textAnchor="middle"
+            fontSize="9"
+            fill="var(--text-muted)"
+            transform={`rotate(
+              -90
+              20
+              ${(top + bottom) / 2}
+            )`}
+          >
+            {mode === "rectangle"
+              ? `h = ${(h ?? 0).toFixed(0)} mm`
+              : "overall depth"}
+          </text>
+
+          {/* Stress axis */}
+          {mode === "rectangle" && (
+            <g aria-label={`Neutral-axis depth c = ${compressionDepth.toFixed(2)} mm from the compression face`}>
+              {[compressionFaceY, neutralAxisY].map((y) => (
+                <line
+                  key={y}
+                  x1={tensionX + 30}
+                  x2={tensionX + 50}
+                  y1={y}
+                  y2={y}
+                  stroke="var(--text-muted)"
+                />
+              ))}
+              <line
+                x1={tensionX + 40}
+                x2={tensionX + 40}
+                y1={compressionFaceY}
+                y2={neutralAxisY}
+                stroke="var(--text-muted)"
+                markerStart="url(#cracking-dim-arrow)"
+                markerEnd="url(#cracking-dim-arrow)"
+              />
+              <text
+                x={tensionX + 50}
+                y={(compressionFaceY + neutralAxisY) / 2 + 3}
+                fontSize="10"
+                fontWeight="600"
+                fill="var(--text)"
+              >
+                {`c = ${compressionDepth.toFixed(2)} mm`}
+              </text>
+            </g>
           )}
 
-        {/* Compression steel */}
-        {mode === "rectangle" &&
-          compressionY !== null && (
-            <SteelLayer
-              y={compressionY}
-              color="#4d7cff"
-              label="As'"
-            />
-          )}
+          <line
+            x1={stressAxisX}
+            y1={top}
+            x2={stressAxisX}
+            y2={bottom}
+            stroke="var(--text)"
+            strokeWidth="1.5"
+          />
 
-        {/* Neutral axis */}
-        <line
-          x1={sectionX - 15}
-          y1={neutralAxisY}
-          x2={tensionX + 30}
-          y2={neutralAxisY}
-          stroke="var(--text-muted)"
-          strokeDasharray="4 3"
-        />
+          {/* Top stress line */}
+          <line
+            x1={stressAxisX}
+            y1={neutralAxisY}
+            x2={
+              tensionAtBottom
+                ? compressionX
+                : tensionX
+            }
+            y2={top}
+            stroke={
+              tensionAtBottom
+                ? "#4d7cff"
+                : "#e05a5a"
+            }
+            strokeWidth="2"
+          />
+
+          {/* Bottom stress line */}
+          <line
+            x1={stressAxisX}
+            y1={neutralAxisY}
+            x2={
+              tensionAtBottom
+                ? tensionX
+                : compressionX
+            }
+            y2={bottom}
+            stroke={
+              tensionAtBottom
+                ? "#e05a5a"
+                : "#4d7cff"
+            }
+            strokeWidth="2"
+          />
+
+          {/* Top stress label */}
+          {[top, bottom].map((faceY) => {
+            const isCompression = faceY === compressionFaceY;
+            const edgeX = isCompression ? compressionX : tensionX;
+
+            return [0.25, 0.5, 0.75, 1].map((fraction) => {
+              const y = neutralAxisY + (faceY - neutralAxisY) * fraction;
+              const x = stressAxisX + (edgeX - stressAxisX) * fraction;
+
+              return (
+                <line
+                  key={`${faceY}-${fraction}`}
+                  x1={isCompression ? x : stressAxisX}
+                  x2={isCompression ? stressAxisX : x}
+                  y1={y}
+                  y2={y}
+                  stroke={isCompression ? "#4d7cff" : "#e05a5a"}
+                  strokeWidth="1"
+                  markerEnd="url(#cracking-stress-arrow)"
+                />
+              );
+            });
+          })}
+
+          <text
+            x={stressAxisX}
+            y={top - 12}
+            textAnchor="middle"
+            fontSize="9"
+            fill={
+              tensionAtBottom
+                ? "#4d7cff"
+                : "#e05a5a"
+            }
+          >
+            {tensionAtBottom
+              ? "compression"
+              : `fr = ${fr.toFixed(3)} MPa`}
+          </text>
+
+          {/* Bottom stress label */}
+          <text
+            x={stressAxisX}
+            y={bottom + 17}
+            textAnchor="middle"
+            fontSize="9"
+            fill={
+              tensionAtBottom
+                ? "#e05a5a"
+                : "#4d7cff"
+            }
+          >
+            {tensionAtBottom
+              ? `fr = ${fr.toFixed(3)} MPa`
+              : "compression"}
+          </text>
+
+          <text
+            x={sectionX + sectionW / 2}
+            y="285"
+            textAnchor="middle"
+            fontSize="10"
+            fontWeight="600"
+            fill="var(--text)"
+          >
+            {reinforcementMode === "none"
+              ? "Gross section"
+              : "Transformed section"}
+          </text>
+
+          <text
+            x={stressAxisX}
+            y="285"
+            textAnchor="middle"
+            fontSize="10"
+            fontWeight="600"
+            fill="var(--text)"
+          >
+            Linear stress distribution
+          </text>
+
+        </g>
 
         <text
-          x={sectionX - 20}
-          y={neutralAxisY + 3}
-          textAnchor="end"
-          fontSize="9"
-          fill="var(--text-muted)"
-        >
-          N.A.
-        </text>
-
-        {/* Height dimension */}
-        <line
-          x1="28"
-          y1={top}
-          x2="28"
-          y2={bottom}
-          stroke="var(--text-muted)"
-          markerStart="url(#cracking-dim-arrow)"
-          markerEnd="url(#cracking-dim-arrow)"
-        />
-
-        <text
-          x="20"
-          y={(top + bottom) / 2}
+          x="360"
+          y="408"
           textAnchor="middle"
-          fontSize="9"
-          fill="var(--text-muted)"
-          transform={`rotate(
-            -90
-            20
-            ${(top + bottom) / 2}
-          )`}
-        >
-          {mode === "rectangle"
-            ? `h = ${(h ?? 0).toFixed(0)} mm`
-            : "overall depth"}
-        </text>
-
-        {/* Stress axis */}
-        <line
-          x1={stressAxisX}
-          y1={top}
-          x2={stressAxisX}
-          y2={bottom}
-          stroke="var(--text)"
-          strokeWidth="1.5"
-        />
-
-        {/* Top stress line */}
-        <line
-          x1={stressAxisX}
-          y1={neutralAxisY}
-          x2={
-            tensionAtBottom
-              ? compressionX
-              : tensionX
-          }
-          y2={top}
-          stroke={
-            tensionAtBottom
-              ? "#4d7cff"
-              : "#e05a5a"
-          }
-          strokeWidth="2"
-        />
-
-        {/* Bottom stress line */}
-        <line
-          x1={stressAxisX}
-          y1={neutralAxisY}
-          x2={
-            tensionAtBottom
-              ? tensionX
-              : compressionX
-          }
-          y2={bottom}
-          stroke={
-            tensionAtBottom
-              ? "#e05a5a"
-              : "#4d7cff"
-          }
-          strokeWidth="2"
-        />
-
-        {/* Top stress label */}
-        <text
-          x={
-            tensionAtBottom
-              ? compressionX - 5
-              : tensionX + 5
-          }
-          y={top + 4}
-          textAnchor={
-            tensionAtBottom
-              ? "end"
-              : "start"
-          }
-          fontSize="9"
-          fill={
-            tensionAtBottom
-              ? "#4d7cff"
-              : "#e05a5a"
-          }
-        >
-          {tensionAtBottom
-            ? "compression"
-            : `fr = ${fr.toFixed(3)} MPa`}
-        </text>
-
-        {/* Bottom stress label */}
-        <text
-          x={
-            tensionAtBottom
-              ? tensionX + 5
-              : compressionX - 5
-          }
-          y={bottom + 4}
-          textAnchor={
-            tensionAtBottom
-              ? "start"
-              : "end"
-          }
-          fontSize="9"
-          fill={
-            tensionAtBottom
-              ? "#e05a5a"
-              : "#4d7cff"
-          }
-        >
-          {tensionAtBottom
-            ? `fr = ${fr.toFixed(3)} MPa`
-            : "compression"}
-        </text>
-
-        <text
-          x={sectionX + sectionW / 2}
-          y="285"
-          textAnchor="middle"
-          fontSize="10"
+          fontSize="11"
           fontWeight="600"
-          fill="var(--text)"
-        >
-          {reinforcementMode === "none"
-            ? "Gross section"
-            : "Transformed section"}
-        </text>
-
-        <text
-          x={stressAxisX}
-          y="285"
-          textAnchor="middle"
-          fontSize="10"
-          fontWeight="600"
-          fill="var(--text)"
-        >
-          Linear stress distribution
-        </text>
-
-        <text
-          x="200"
-          y="308"
-          textAnchor="middle"
-          fontSize="9"
           fill="var(--text-muted)"
         >
           {direction === "positive"
@@ -367,7 +436,14 @@ export function CrackingMomentDiagram({
             : "Negative moment - top tension"}
         </text>
       </svg>
-    </div>
+
+      <div className="flex flex-wrap justify-center gap-4 pt-2 text-[10px] text-[var(--text-muted)]">
+        <Legend color="#4d7cff" label="Compression" />
+        <Legend color="#e05a5a" label="Tension" />
+        <Legend color="#f5941f" label="Tension region" />
+        <Legend color="var(--text-muted)" label="Neutral axis" dashed />
+      </div>
+    </DiagramFrame>
   );
 }
 
@@ -403,5 +479,25 @@ function SteelLayer({
         {label}
       </text>
     </g>
+  );
+}
+
+function Legend({
+  color,
+  label,
+  dashed = false,
+}: {
+  color: string;
+  label: string;
+  dashed?: boolean;
+}) {
+  return (
+    <span className="flex items-center gap-1.5">
+      <span
+        className="h-0 w-6 border-t-2"
+        style={{ borderColor: color, borderStyle: dashed ? "dashed" : "solid" }}
+      />
+      {label}
+    </span>
   );
 }

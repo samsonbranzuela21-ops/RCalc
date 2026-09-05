@@ -289,13 +289,13 @@ export default function BeamCapacityCheckPage() {
 
   return (
     <div className="min-h-screen bg-[var(--bg)] px-5 py-10 text-[var(--text)]">
-      <div className="mx-auto max-w-[560px]">
-        <h1 className="text-[22px] font-extrabold">Beam Capacity Check</h1>
+      <div className="mx-auto min-w-0 max-w-6xl">
+        <h1 className="text-2xl font-bold">Beam Capacity Check</h1>
         <p className="mt-1 text-[12px] text-[var(--text-muted)]">
           Analysis of an existing RC beam section — singly or doubly reinforced, NSCP 2015 / ACI 318.
         </p>
 
-        <div className="mt-6 rounded-lg border border-[var(--border)] bg-[var(--bg-surface)] p-4">
+        <div className="mt-6 rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] p-4 sm:p-5">
           <label className="flex items-center gap-2 text-[11px] font-semibold text-[var(--text)]">
             <input
               type="checkbox"
@@ -303,7 +303,7 @@ export default function BeamCapacityCheckPage() {
               onChange={(e) => setIsDoubly(e.target.checked)}
               className="h-3.5 w-3.5"
             />
-            Doubly reinforced (has compression steel, As')
+            Doubly reinforced (has compression steel, As&apos;)
           </label>
 
           <div className="mt-4 grid grid-cols-2 gap-3">
@@ -444,7 +444,7 @@ export default function BeamCapacityCheckPage() {
         </button>
 
         {result && (
-          <div className="mt-6 rounded-lg border border-[var(--border)] bg-[var(--bg-surface)] p-4">
+          <div className="mt-6 rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] p-4 sm:p-5">
             <div
               className={`mb-3 rounded-md px-3 py-2 text-[11px] font-semibold ${
                 result.ok !== false && result.ductilityClass !== "compression-controlled"
@@ -455,7 +455,7 @@ export default function BeamCapacityCheckPage() {
               {result.message}
             </div>
 
-            <div className="w-full overflow-hidden rounded-md border border-[var(--border)] bg-[var(--bg)] p-2 sm:p-4">
+            <div className="min-w-0 w-full">
               <StrainStressDiagram
                 b={parseFloat(b)}
                 d={computedDepths ? computedDepths.d : parseFloat(d)}
@@ -514,10 +514,12 @@ export default function BeamCapacityCheckPage() {
             {result.isDoublyReinforced && (
               <ResultRow
                 label="Compression steel"
-                value={result.compressionSteelYields ? `Yields (fs' = fy)` : `Does not yield (fs' = ${result.fsPrime?.toFixed(1)} MPa)`}
+                value={result.compressionSteelYields ? `Yields (εs' = ${result.epsilonSPrime?.toFixed(5)}, fs' = fy)` : `Does not yield (εs' = ${result.epsilonSPrime?.toFixed(5)}, fs' = ${result.fsPrime?.toFixed(1)} MPa)`}
               />
             )}
             <ResultRow label="εt (tension strain)" value={result.epsilonT.toFixed(5)} />
+            <ResultRow label="Bottom tension steel" value={`${result.tensionSteelYields ? "Yields" : "Does not yield (elastic)"} — fs = ${result.tensionStress.toFixed(1)} MPa`} />
+            <ResultRow label="ρmin / ρ / ρmax" value={`${result.rhoMin.toFixed(5)} / ${result.rho.toFixed(5)} / ${result.rhoMax.toFixed(5)} — ${result.rhoAdequate ? "PASS" : "FAIL"}`} />
             <ResultRow label="Ductility class" value={result.ductilityClass.replace("-", " ")} />
             <ResultRow label="φ" value={result.phi.toFixed(3)} />
             <ResultRow label="Mn (nominal capacity)" value={`${result.Mn.toFixed(2)} kN·m`} />
@@ -563,7 +565,7 @@ export default function BeamCapacityCheckPage() {
             </button>
 
             {showSolution && (
-              <div className="mt-3 space-y-4 rounded-lg border border-[var(--border)] bg-[var(--bg-surface)] p-4">
+              <div className="mt-3 space-y-4 rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] p-4 sm:p-5">
                 {steps.map((step, i) => (
                   <div key={i} className="rounded-md border border-[var(--border)] bg-[var(--bg)] p-3">
                     <div className="flex items-center gap-2">

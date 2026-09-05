@@ -70,14 +70,14 @@ export default function LBeamDesignPage() {
 
   return (
     <div className="min-h-screen bg-[var(--bg)] px-3 py-8 text-[var(--text)] sm:px-5 sm:py-10">
-      <div className="mx-auto max-w-[620px]">
-        <h1 className="text-[22px] font-extrabold">L-Beam Design</h1>
+      <div className="mx-auto min-w-0 max-w-6xl">
+        <h1 className="text-2xl font-bold">L-Beam Design</h1>
         <p className="mt-1 text-[12px] leading-relaxed text-[var(--text-muted)]">
           Singly reinforced edge L-beam under positive bending — NSCP 2015 and
           ACI 318-14 strength design method.
         </p>
 
-        <div className="mt-6 grid grid-cols-1 gap-3 rounded-lg border border-[var(--border)] bg-[var(--bg-surface)] p-4 sm:grid-cols-2">
+        <div className="mt-6 grid grid-cols-1 gap-3 rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] p-4 sm:p-5 sm:grid-cols-2">
           <Field label="Mu — factored moment (kN·m)" value={Mu} onChange={setMu} />
           <Field label="bw — web width (mm)" value={bw} onChange={setBw} />
           <Field label="hf — flange thickness (mm)" value={hf} onChange={setHf} />
@@ -130,7 +130,7 @@ export default function LBeamDesignPage() {
         )}
 
         {result && (
-          <div className="mt-6 rounded-lg border border-[var(--border)] bg-[var(--bg-surface)] p-3 sm:p-4">
+          <div className="mt-6 rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] p-3 sm:p-4">
             <div
               className={`mb-3 rounded-md px-3 py-2 text-[11px] font-semibold ${
                 result.ok
@@ -264,7 +264,7 @@ export default function LBeamDesignPage() {
             </button>
 
             {showSolution && (
-              <div className="mt-3 space-y-4 rounded-lg border border-[var(--border)] bg-[var(--bg-surface)] p-3 sm:p-4">
+              <div className="mt-3 space-y-4 rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] p-3 sm:p-4">
                 {steps.map((step, index) => (
                   <div
                     key={`${step.label}-${index}`}

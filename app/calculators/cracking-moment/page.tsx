@@ -104,8 +104,8 @@ export default function CrackingMomentPage() {
 
   return (
     <div className="min-h-screen bg-[var(--bg)] px-3 py-8 text-[var(--text)] sm:px-5 sm:py-10">
-      <div className="mx-auto max-w-[600px]">
-        <h1 className="text-[22px] font-extrabold">
+      <div className="mx-auto min-w-0 max-w-6xl">
+        <h1 className="text-2xl font-bold">
           Cracking Moment
         </h1>
 
@@ -114,7 +114,7 @@ export default function CrackingMomentPage() {
           section properties.
         </p>
 
-        <div className="mt-6 rounded-lg border border-[var(--border)] bg-[var(--bg-surface)] p-4">
+        <div className="mt-6 rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] p-4 sm:p-5">
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <SelectField
               label="Section-property mode"
@@ -320,7 +320,7 @@ export default function CrackingMomentPage() {
         )}
 
         {result && (
-          <div className="mt-6 rounded-lg border border-[var(--border)] bg-[var(--bg-surface)] p-3 sm:p-4">
+          <div className="mt-6 rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] p-3 sm:p-4">
             <div className="mb-3 rounded-md bg-[#39c98a]/15 px-3 py-2 text-[11px] font-semibold text-[#39c98a]">
               {result.message}
             </div>
@@ -439,7 +439,7 @@ export default function CrackingMomentPage() {
             </button>
 
             {showSolution && (
-              <div className="mt-3 space-y-4 rounded-lg border border-[var(--border)] bg-[var(--bg-surface)] p-3 sm:p-4">
+              <div className="mt-3 space-y-4 rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] p-3 sm:p-4">
                 {steps.map((step, index) => (
                   <div
                     key={`${step.label}-${index}`}
