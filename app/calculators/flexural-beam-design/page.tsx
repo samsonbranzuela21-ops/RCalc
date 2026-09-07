@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { InlineKatex } from "@/components/Katex";
-import { BeamCrossSection } from "@/components/BeamCrossSection";
+import { FlexuralBeamDiagram } from "@/components/FlexuralBeamDiagram";
 import {
   designSinglyReinforcedBeam,
   getSolutionSteps,
@@ -122,7 +122,7 @@ export default function FlexuralBeamDesignPage() {
               {result.message}
             </div>
 
-            <BeamCrossSection
+            <FlexuralBeamDiagram
               b={parseFloat(b)}
               d={parseFloat(d)}
               barDiameter={barDiameter}
@@ -131,8 +131,12 @@ export default function FlexuralBeamDesignPage() {
               spacingOk={result.spacingOk}
               tensionBarsPerLayer={result.tensionBarsPerLayer}
               dPrime={result.dPrime}
+              c={result.c}
+              a={result.a}
               compressionBarDiameter={compressionBarDiameter}
               compressionBarsRequired={result.compressionBarsRequired}
+              compressionClearSpacing={result.compressionClearSpacing}
+              compressionSpacingOk={result.compressionSpacingOk}
               compressionBarsPerLayer={result.compressionBarsPerLayer}
             />
 

@@ -10,7 +10,6 @@ import {
   type BeamCapacitySolutionStep,
 } from "@/lib/beam-capacity";
 
-const barSizes = [12, 16, 20, 25, 28, 32];
 const stirrupSizes = [10, 12, 16];
 type LayerCount = 1 | 2;
 
@@ -111,7 +110,7 @@ function formatLayerSpacing(check: LayerSpacingCheck): string {
     return check.ok === false ? "NOT OK" : "N/A";
   }
 
-  return `${values.join("; ")} — ${check.ok ? "OK" : "NOT OK"}`;
+    return `${values.join("; ")} - ${check.ok ? "OK" : "NOT OK"}`;
 }
 
 export default function BeamCapacityCheckPage() {
@@ -150,9 +149,12 @@ export default function BeamCapacityCheckPage() {
     const fyVal = parseFloat(fy);
     const MuVal = Mu.trim() === "" ? null : parseFloat(Mu);
     const nBars = parseInt(numBars, 10);
+    const barDiameters = isDoubly
+      ? [barDiameter, barDiameterPrime]
+      : [barDiameter];
 
     if (
-      [bVal, fcVal, fyVal, nBars].some((v) => isNaN(v) || v <= 0) ||
+      [bVal, fcVal, fyVal, nBars, ...barDiameters].some((v) => isNaN(v) || v <= 0) ||
       (MuVal !== null && (isNaN(MuVal) || MuVal <= 0))
     ) {
       setInputError("Enter positive values. Mu may be left blank.");
@@ -292,7 +294,7 @@ export default function BeamCapacityCheckPage() {
       <div className="mx-auto min-w-0 max-w-6xl">
         <h1 className="text-2xl font-bold">Beam Capacity Check</h1>
         <p className="mt-1 text-[12px] text-[var(--text-muted)]">
-          Analysis of an existing RC beam section — singly or doubly reinforced, NSCP 2015 / ACI 318.
+            Analysis of an existing RC beam section - singly or doubly reinforced, NSCP 2015 / ACI 318.
         </p>
 
         <div className="mt-6 rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] p-4 sm:p-5">
@@ -307,10 +309,10 @@ export default function BeamCapacityCheckPage() {
           </label>
 
           <div className="mt-4 grid grid-cols-2 gap-3">
-            <Field label="b — width (mm)" value={b} onChange={setB} />
+            <Field label="b - width (mm)" value={b} onChange={setB} />
             <Field label="f'c (MPa)" value={fc} onChange={setFc} />
             <Field label="fy (MPa)" value={fy} onChange={setFy} />
-            <Field label="Mu — applied factored moment (kN·m), optional" value={Mu} onChange={setMu} />
+            <Field label="Mu - applied factored moment (kN·m), optional" value={Mu} onChange={setMu} />
           </div>
 
           <div className="mt-5 border-t border-[var(--border)] pt-4">
@@ -344,15 +346,15 @@ export default function BeamCapacityCheckPage() {
 
             {depthMode === "direct" ? (
               <div className="mt-3 grid grid-cols-2 gap-3">
-                <Field label="d — effective depth (mm)" value={d} onChange={setD} />
+                <Field label="d - effective depth (mm)" value={d} onChange={setD} />
                 {isDoubly && (
-                  <Field label="d' — depth to compression steel (mm)" value={dPrime} onChange={setDPrime} />
+                  <Field label="d' - depth to compression steel (mm)" value={dPrime} onChange={setDPrime} />
                 )}
               </div>
             ) : (
               <div className="mt-3 grid grid-cols-2 gap-3">
-                <Field label="h — overall depth (mm)" value={h} onChange={setH} />
-                <Field label="CC — clear cover (mm)" value={clearCover} onChange={setClearCover} />
+                <Field label="h - overall depth (mm)" value={h} onChange={setH} />
+                <Field label="CC - clear cover (mm)" value={clearCover} onChange={setClearCover} />
                 <div>
                   <label className="mb-1 block text-[10px] font-medium text-[var(--text-muted)]">
                     Stirrup diameter (mm)
@@ -378,18 +380,7 @@ export default function BeamCapacityCheckPage() {
             <div className="grid grid-cols-2 gap-3">
               <Field label="Number of bars" value={numBars} onChange={setNumBars} />
               <div>
-                <label className="mb-1 block text-[10px] font-medium text-[var(--text-muted)]">
-                  Bar diameter (mm)
-                </label>
-                <select
-                  value={barDiameter}
-                  onChange={(e) => setBarDiameter(Number(e.target.value))}
-                  className="w-full rounded-md border border-[var(--border)] bg-[var(--bg)] px-2 py-1.5 text-[12px] text-[var(--text)]"
-                >
-                  {barSizes.map((size) => (
-                    <option key={size} value={size}>{size} mm</option>
-                  ))}
-                </select>
+                <NumberField label="Bar diameter (mm)" value={barDiameter} onChange={setBarDiameter} />
               </div>
               <LayerSelect
                 label="Tension steel layers"
@@ -407,18 +398,7 @@ export default function BeamCapacityCheckPage() {
               <div className="grid grid-cols-2 gap-3">
                 <Field label="Number of bars" value={numBarsPrime} onChange={setNumBarsPrime} />
                 <div>
-                  <label className="mb-1 block text-[10px] font-medium text-[var(--text-muted)]">
-                    Bar diameter (mm)
-                  </label>
-                  <select
-                    value={barDiameterPrime}
-                    onChange={(e) => setBarDiameterPrime(Number(e.target.value))}
-                    className="w-full rounded-md border border-[var(--border)] bg-[var(--bg)] px-2 py-1.5 text-[12px] text-[var(--text)]"
-                  >
-                    {barSizes.map((size) => (
-                      <option key={size} value={size}>{size} mm</option>
-                    ))}
-                  </select>
+                  <NumberField label="Bar diameter (mm)" value={barDiameterPrime} onChange={setBarDiameterPrime} />
                 </div>
                 <LayerSelect
                   label="Compression steel layers"
@@ -492,50 +472,58 @@ export default function BeamCapacityCheckPage() {
             )}
 
             <ResultRow label="Section type" value={result.isDoublyReinforced ? "Doubly reinforced" : "Singly reinforced"} />
-            <ResultRow label="As (tension steel)" value={`${(parseInt(numBars, 10) * (Math.PI / 4) * barDiameter * barDiameter).toFixed(0)} mm² (${numBars} × ${barDiameter}mm)`} />
+            <ResultRow label="As (tension steel)" value={`${(parseInt(numBars, 10) * (Math.PI / 4) * barDiameter * barDiameter).toFixed(0)} mm² (${numBars} × ${barDiameter} mm)`} />
             <ResultRow
               label="Tension-bar arrangement"
-              value={`${splitBars(parseInt(numBars, 10), tensionLayers).join(" + ")} bar(s) — ${tensionLayers} layer(s)`}
+              value={`${splitBars(parseInt(numBars, 10), tensionLayers).join(" + ")} bar(s) - ${tensionLayers} layer(s)`}
             />
             {isDoubly && (
               <ResultRow
                 label="As' (compression steel)"
-                value={`${(parseInt(numBarsPrime, 10) * (Math.PI / 4) * barDiameterPrime * barDiameterPrime).toFixed(0)} mm² (${numBarsPrime} × ${barDiameterPrime}mm)`}
+                value={`${(parseInt(numBarsPrime, 10) * (Math.PI / 4) * barDiameterPrime * barDiameterPrime).toFixed(0)} mm² (${numBarsPrime} × ${barDiameterPrime} mm)`}
               />
             )}
             {isDoubly && (
               <ResultRow
                 label="Compression-bar arrangement"
-                value={`${splitBars(parseInt(numBarsPrime, 10), compressionLayers).join(" + ")} bar(s) — ${compressionLayers} layer(s)`}
+                value={`${splitBars(parseInt(numBarsPrime, 10), compressionLayers).join(" + ")} bar(s) - ${compressionLayers} layer(s)`}
               />
             )}
             <ResultRow label="a (stress block depth)" value={`${result.a.toFixed(1)} mm`} />
             <ResultRow label="c (neutral axis)" value={`${result.c.toFixed(1)} mm`} />
             {result.isDoublyReinforced && (
               <ResultRow
-                label="Compression steel"
-                value={result.compressionSteelYields ? `Yields (εs' = ${result.epsilonSPrime?.toFixed(5)}, fs' = fy)` : `Does not yield (εs' = ${result.epsilonSPrime?.toFixed(5)}, fs' = ${result.fsPrime?.toFixed(1)} MPa)`}
+                label="Top steel"
+                value={
+                  result.compressionSteelYields
+                    ? `Yields in compression (epsilon_s' = ${result.epsilonSPrime?.toFixed(5)}, f_s' = fy)`
+                    : result.compressionSteelTensionYields
+                      ? `Yields in tension (epsilon_s' = ${result.epsilonSPrime?.toFixed(5)}, f_s' = -fy)`
+                      : result.compressionSteelInTension
+                        ? `In tension, elastic (epsilon_s' = ${result.epsilonSPrime?.toFixed(5)}, f_s' = ${result.fsPrime?.toFixed(1)} MPa)`
+                        : `In compression, elastic (epsilon_s' = ${result.epsilonSPrime?.toFixed(5)}, f_s' = ${result.fsPrime?.toFixed(1)} MPa)`
+                }
               />
             )}
-            <ResultRow label="εt (tension strain)" value={result.epsilonT.toFixed(5)} />
-            <ResultRow label="Bottom tension steel" value={`${result.tensionSteelYields ? "Yields" : "Does not yield (elastic)"} — fs = ${result.tensionStress.toFixed(1)} MPa`} />
-            <ResultRow label="ρmin / ρ / ρmax" value={`${result.rhoMin.toFixed(5)} / ${result.rho.toFixed(5)} / ${result.rhoMax.toFixed(5)} — ${result.rhoAdequate ? "PASS" : "FAIL"}`} />
+            <ResultRow label="Tension strain (epsilon_t)" value={result.epsilonT.toFixed(5)} />
+            <ResultRow label="Bottom tension steel" value={`${result.tensionSteelYields ? "Yields" : "Does not yield (elastic)"} - f_s = ${result.tensionStress.toFixed(1)} MPa`} />
+            <ResultRow label="Reinforcement ratio (rho_min / rho / rho_max)" value={`${result.rhoMin.toFixed(5)} / ${result.rho.toFixed(5)} / ${result.rhoMax.toFixed(5)} - ${result.rhoAdequate ? "PASS" : "FAIL"}`} />
             <ResultRow label="Ductility class" value={result.ductilityClass.replace("-", " ")} />
-            <ResultRow label="φ" value={result.phi.toFixed(3)} />
+            <ResultRow label="Strength reduction factor (phi)" value={result.phi.toFixed(3)} />
             <ResultRow label="Mn (nominal capacity)" value={`${result.Mn.toFixed(2)} kN·m`} />
-            <ResultRow label="φMn (design capacity)" value={`${result.phiMn.toFixed(2)} kN·m`} bold />
+            <ResultRow label="phi Mn (design capacity)" value={`${result.phiMn.toFixed(2)} kN·m`} bold />
             {result.Mu !== null && result.utilizationRatio !== null && (
               <>
                 <ResultRow label="Mu (applied)" value={`${result.Mu.toFixed(2)} kN·m`} />
                 <ResultRow
-                  label="Utilization (Mu / φMn)"
+                  label="Utilization (Mu / phi Mn)"
                   value={`${(result.utilizationRatio * 100).toFixed(0)}%`}
                   bold
                 />
               </>
             )}
             {result.Mu === null && (
-              <ResultRow label="Adequacy check" value="Not performed — Mu was not provided" />
+              <ResultRow label="Adequacy check" value="Not performed - Mu was not provided" />
             )}
             {spacingCheck && (
               <ResultRow
@@ -566,6 +554,9 @@ export default function BeamCapacityCheckPage() {
 
             {showSolution && (
               <div className="mt-3 space-y-4 rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] p-4 sm:p-5">
+                <p className="text-[11px] leading-relaxed text-[var(--text-muted)]">
+                  The steps below show the calculation in order. Each card separates the equation, the numerical substitution, and the answer.
+                </p>
                 {steps.map((step, i) => (
                   <div key={i} className="rounded-md border border-[var(--border)] bg-[var(--bg)] p-3">
                     <div className="flex items-center gap-2">
@@ -575,17 +566,36 @@ export default function BeamCapacityCheckPage() {
                       <p className="text-[11px] font-semibold text-[var(--text)]">{step.label}</p>
                     </div>
 
-                    <div className="mt-2 space-y-1.5 pl-7">
-                      <div className="overflow-x-auto rounded bg-[var(--bg-surface)] px-2 py-1.5 text-[var(--text)]">
-                        <InlineKatex math={step.formula} />
+                    <div className="mt-3 space-y-2 pl-7">
+                      <div>
+                        <p className="mb-1 text-[9px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">
+                          Equation
+                        </p>
+                        <div className="overflow-x-auto rounded bg-[var(--bg-surface)] px-2 py-2 text-[var(--text)]">
+                          <InlineKatex math={step.formula} />
+                        </div>
                       </div>
                       {step.substitution && (
-                        <div className="overflow-x-auto text-[var(--text-muted)]">
-                          <InlineKatex math={step.substitution} />
+                        <div>
+                          <p className="mb-1 text-[9px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">
+                            Substitution
+                          </p>
+                          <div className="overflow-x-auto rounded border border-[var(--border)] px-2 py-2 text-[var(--text-muted)]">
+                            <InlineKatex math={step.substitution} />
+                          </div>
                         </div>
                       )}
-                      <div className="mt-1.5 inline-block rounded bg-[#39c98a]/15 px-2 py-1 text-[#39c98a]">
-                        <InlineKatex math={step.result} />
+                      <div className="rounded bg-[#39c98a]/15 px-2 py-2 text-[#39c98a]">
+                        <p className="mb-1 text-[9px] font-semibold uppercase tracking-wide">
+                          Answer
+                        </p>
+                        <div className="overflow-x-auto">
+                          {step.resultKind === "text" ? (
+                            <p className="text-[11px] leading-relaxed">{step.result}</p>
+                          ) : (
+                            <InlineKatex math={step.result} />
+                          )}
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -641,9 +651,33 @@ function LayerSelect({
 
 function ResultRow({ label, value, bold }: { label: string; value: string; bold?: boolean }) {
   return (
-    <div className="flex items-center justify-between border-b border-[var(--border)] py-1.5 text-[11px] last:border-b-0">
-      <span className="text-[var(--text-muted)]">{label}</span>
-      <span className={bold ? "font-bold" : ""}>{value}</span>
+    <div className="flex items-start justify-between gap-4 border-b border-[var(--border)] py-1.5 text-[11px] last:border-b-0">
+      <span className="min-w-0 leading-relaxed text-[var(--text-muted)]">{label}</span>
+      <span className={`shrink-0 text-right leading-relaxed ${bold ? "font-bold" : ""}`}>{value}</span>
+    </div>
+  );
+}
+
+function NumberField({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  onChange: (value: number) => void;
+}) {
+  return (
+    <div>
+      <label className="mb-1 block text-[10px] font-medium text-[var(--text-muted)]">{label}</label>
+      <input
+        type="number"
+        min="0"
+        step="any"
+        value={Number.isFinite(value) ? value : ""}
+        onChange={(event) => onChange(parseFloat(event.target.value))}
+        className="w-full rounded-md border border-[var(--border)] bg-[var(--bg)] px-2 py-1.5 text-[12px] text-[var(--text)]"
+      />
     </div>
   );
 }

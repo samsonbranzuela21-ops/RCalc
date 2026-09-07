@@ -7,6 +7,7 @@ import {
   designShearReinforcement,
   getShearSolutionSteps,
   type ShearDesignResult,
+  type ShearDesignInput,
   type ShearSolutionStep,
 } from "@/lib/shear-design";
 
@@ -20,6 +21,7 @@ export default function ShearDesignPage() {
   const [fy, setFy] = useState("275");
   const [stirrupDiameter, setStirrupDiameter] = useState(10);
   const [legs, setLegs] = useState(2);
+  const [calculatedInput, setCalculatedInput] = useState<ShearDesignInput | null>(null);
   const [result, setResult] = useState<ShearDesignResult | null>(null);
   const [steps, setSteps] = useState<ShearSolutionStep[]>([]);
   const [showSolution, setShowSolution] = useState(false);
@@ -35,7 +37,7 @@ export default function ShearDesignPage() {
       legs,
     };
 
-    if (Object.values(parsed).some((v) => isNaN(v) || v <= 0)) {
+    if (Object.values(parsed).some((v) => !Number.isFinite(v) || v <= 0)) {
       setResult(null);
       setSteps([]);
       return;
@@ -43,6 +45,7 @@ export default function ShearDesignPage() {
 
     const computed = designShearReinforcement(parsed);
     setResult(computed);
+    setCalculatedInput(parsed);
     setSteps(getShearSolutionSteps(parsed, computed));
   }
 
@@ -103,7 +106,7 @@ export default function ShearDesignPage() {
           Calculate
         </button>
 
-        {result && (
+        {result && calculatedInput && (
           <div className="mt-6 rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] p-4 sm:p-5">
             <div
               className={`mb-3 rounded-md px-3 py-2 text-[11px] font-semibold ${
@@ -116,11 +119,12 @@ export default function ShearDesignPage() {
             </div>
 
             <StirrupElevation
-              d={parseFloat(d)}
+              b={calculatedInput.b}
+              d={calculatedInput.d}
               spacingFinal={result.spacingFinal}
               stirrupCase={result.stirrupCase}
-              legs={legs}
-              stirrupDiameter={stirrupDiameter}
+              legs={calculatedInput.legs}
+              stirrupDiameter={calculatedInput.stirrupDiameter}
             />
 
             <div className="mt-4">
@@ -131,12 +135,12 @@ export default function ShearDesignPage() {
               <>
                 <ResultRow label="Av" value={`${result.Av.toFixed(1)} mm²`} />
                 {result.spacingRequired !== null && (
-                  <ResultRow label="Spacing required" value={`${result.spacingRequired.toFixed(0)} mm`} />
+                  <ResultRow label="Spacing required" value={`${result.spacingRequired.toFixed(2)} mm`} />
                 )}
-                <ResultRow label="Spacing max (code)" value={`${result.spacingMax.toFixed(0)} mm`} />
+                <ResultRow label="Spacing max (code)" value={`${result.spacingMax.toFixed(2)} mm`} />
                 <ResultRow
                   label="Governing spacing"
-                  value={`${result.spacingFinal?.toFixed(0)} mm`}
+                  value={`${result.spacingFinal?.toFixed(2)} mm`}
                   bold
                 />
               </>
@@ -156,6 +160,7 @@ export default function ShearDesignPage() {
 
             {showSolution && (
               <div className="mt-3 space-y-4 rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] p-4 sm:p-5">
+                <p className="text-[11px] text-[var(--text-muted)]">Manual solution for the calculated inputs. Normal-weight concrete, vertical stirrups, and the calculator’s simplified shear method are assumed. Intermediate values are displayed rounded; calculations use full precision.</p>
                 {steps.map((step, i) => (
                   <div
                     key={i}
@@ -179,7 +184,7 @@ export default function ShearDesignPage() {
                           <InlineKatex math={step.substitution} />
                         </div>
                       )}
-                      <div className="mt-1.5 inline-block rounded bg-[#39c98a]/15 px-2 py-1 text-[#39c98a]">
+                      <div className="mt-1.5 max-w-full overflow-x-auto rounded bg-[#39c98a]/15 px-2 py-1 text-[#39c98a]">
                         <InlineKatex math={step.result} />
                       </div>
                     </div>

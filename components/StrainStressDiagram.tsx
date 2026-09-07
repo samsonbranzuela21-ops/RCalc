@@ -132,8 +132,10 @@ function SinglyReinforcedDiagram({
   const bottomSteelArrowEndX =
     bottomSteelState === "tension" ? forcesX : forcesX - 50;
   const strainExtent = Math.max(Math.abs(c), Math.abs(d - c), 1);
-  const strainTopX = strainCx - 38 * c / strainExtent;
-  const strainBottomX = strainCx + 38 * (d - c) / strainExtent;
+  // Match the ratio-triangle orientation used by CrackingMomentDiagram:
+  // compression grows to the right and tension grows to the left.
+  const strainTopX = strainCx + 38 * c / strainExtent;
+  const strainBottomX = strainCx - 38 * (d - c) / strainExtent;
   const panelLabelY = bottom + 55;
 
   return (
@@ -176,12 +178,28 @@ function SinglyReinforcedDiagram({
       <text x={sectionX + sectionW / 2} y={panelLabelY} textAnchor="middle" fontSize="10.5" fontWeight="600" fill="var(--text)">Singly reinforced section</text>
 
       <line x1={strainCx} y1={top} x2={strainCx} y2={bottom} stroke="var(--text)" strokeWidth="1.2" />
+      <polygon
+        points={`${strainCx},${top} ${strainTopX},${top} ${strainCx},${naY}`}
+        fill="#4d7cff"
+        fillOpacity="0.24"
+        stroke="#4d7cff"
+        strokeOpacity="0.7"
+        strokeWidth="1"
+      />
+      <polygon
+        points={`${strainCx},${naY} ${strainCx},${steelY} ${strainBottomX},${steelY}`}
+        fill="#e05a5a"
+        fillOpacity="0.24"
+        stroke="#e05a5a"
+        strokeOpacity="0.7"
+        strokeWidth="1"
+      />
       <line x1={strainTopX} y1={top} x2={strainBottomX} y2={steelY} stroke="var(--text)" strokeWidth="2" />
+      <line x1={strainCx - 18} y1={naY} x2={strainCx + 18} y2={naY} stroke="var(--text-muted)" strokeWidth="1" />
+      <text x={strainCx + 22} y={naY + 3} fontSize="9" fill="var(--text-muted)">N.A.</text>
       <circle cx={strainCx} cy={naY} r="2" fill="var(--text)" />
-      <DistributionArrow from={strainCx} to={strainTopX} y={top} state="compression" />
-      <text x={strainTopX - 6} y={top - 10} textAnchor="end" fontSize="10.5" fill="var(--text)">εc = 0.003</text>
-      <DistributionArrow from={strainCx} to={strainBottomX} y={steelY} state={bottomSteelState} />
-      <text x={strainBottomX + 6} y={steelY + 4} textAnchor="start" fontSize="10.5" fill="var(--text)">εs = {c > 0 ? (0.003 * (d - c) / c).toFixed(4) : "—"}</text>
+      <text x={strainTopX + 6} y={top - 10} textAnchor="start" fontSize="10.5" fill="var(--text)">εc = 0.003</text>
+      <text x={strainBottomX - 6} y={steelY + 4} textAnchor="end" fontSize="10.5" fill="var(--text)">εs = {c > 0 ? (0.003 * (d - c) / c).toFixed(4) : "—"}</text>
       <line x1={strainCx - 50} y1={top} x2={strainCx - 50} y2={naY} stroke="var(--text-muted)" markerStart="url(#dim-arrow)" markerEnd="url(#dim-arrow)" />
       <text x={strainCx - 56} y={(top + naY) / 2 + 3} textAnchor="end" fontSize="10.5" fontStyle="italic" fill="var(--text)">c</text>
       <text x={strainCx} y={panelLabelY} textAnchor="middle" fontSize="10.5" fontWeight="600" fill="var(--text)">Strain distribution</text>
@@ -300,8 +318,10 @@ function DoublyReinforcedDiagram({
   const aW = 46;
 
   const strainExtent = Math.max(Math.abs(c), Math.abs(d - c), 1);
-  const strainTopX = strainCx - 34 * c / strainExtent;
-  const strainBottomX = strainCx + 34 * (d - c) / strainExtent;
+  // Keep the strain ratio triangle oriented like the cracking-moment diagram:
+  // compression is to the right of the neutral-axis line and tension to the left.
+  const strainTopX = strainCx + 34 * c / strainExtent;
+  const strainBottomX = strainCx - 34 * (d - c) / strainExtent;
   const strainXatY = (y: number) => strainTopX + ((strainBottomX - strainTopX) * (y - top)) / (steelY - top);
 
   const captionY = bottom + 30;
@@ -402,18 +422,33 @@ function DoublyReinforcedDiagram({
 
       {/* ---- (b) Strain diagram ---- */}
       <line x1={strainCx} y1={top} x2={strainCx} y2={bottom} stroke="var(--text)" strokeWidth="1.2" />
+      <polygon
+        points={`${strainCx},${top} ${strainTopX},${top} ${strainCx},${naY}`}
+        fill="#4d7cff"
+        fillOpacity="0.24"
+        stroke="#4d7cff"
+        strokeOpacity="0.7"
+        strokeWidth="1"
+      />
+      <polygon
+        points={`${strainCx},${naY} ${strainCx},${steelY} ${strainBottomX},${steelY}`}
+        fill="#e05a5a"
+        fillOpacity="0.24"
+        stroke="#e05a5a"
+        strokeOpacity="0.7"
+        strokeWidth="1"
+      />
       <line x1={strainTopX} y1={top} x2={strainBottomX} y2={steelY} stroke="var(--text)" strokeWidth="2" />
-      <DistributionArrow from={strainCx} to={strainTopX} y={top} state="compression" />
-      <DistributionArrow from={strainCx} to={strainBottomX} y={steelY} state={lowerSteelState} />
+      <line x1={strainCx - 16} y1={naY} x2={strainCx + 16} y2={naY} stroke="var(--text-muted)" strokeWidth="1" />
+      <text x={strainCx + 20} y={naY + 3} fontSize="8.5" fill="var(--text-muted)">N.A.</text>
       <circle cx={strainCx} cy={naY} r="2" fill="var(--text)" />
 
-      <text x={strainTopX - 4} y={top - 10} textAnchor="end" fontSize="10" fill="var(--text)">εcu = 0.003</text>
+      <text x={strainTopX + 4} y={top - 10} textAnchor="start" fontSize="10" fill="var(--text)">εcu = 0.003</text>
 
       <circle cx={strainXatY(dPrimeY)} cy={dPrimeY} r="2" fill="#f5941f" />
-      <DistributionArrow from={strainCx} to={strainXatY(dPrimeY)} y={dPrimeY} state={upperSteelState} />
-      <text x={strainXatY(dPrimeY) - 6} y={dPrimeY - 4} textAnchor="end" fontSize="9.5" fill="#f5941f">ε′s</text>
+      <text x={strainXatY(dPrimeY) + 6} y={dPrimeY - 4} textAnchor="start" fontSize="9.5" fill="#f5941f">ε′s</text>
 
-      <text x={strainBottomX + 6} y={steelY + 4} fontSize="10" fill="var(--text)">εs</text>
+      <text x={strainBottomX - 6} y={steelY + 4} textAnchor="end" fontSize="10" fill="var(--text)">εs</text>
 
       <line x1={strainCx - 46} y1={top} x2={strainCx - 46} y2={naY} stroke="var(--text-muted)" markerStart="url(#dim-arrow)" markerEnd="url(#dim-arrow)" />
       <text x={strainCx - 52} y={(top + naY) / 2 + 3} textAnchor="end" fontSize="10" fontStyle="italic" fill="var(--text)">c</text>
@@ -659,7 +694,7 @@ function Defs() {
 }
 
 function StrainLegend() {
-  return <><DiagramLegend color="var(--text)" label="Section and strain" /><DiagramLegend color="#4d7cff" label="← Concrete compression" /><DiagramLegend color="#f5941f" label="← Compression steel" /><DiagramLegend color="#e05a5a" label="Tension →" /><DiagramLegend color="var(--text-muted)" label="Neutral axis / dimensions" dashed /></>;
+  return <><DiagramLegend color="var(--text)" label="Section and strain" /><DiagramLegend color="#4d7cff" label="Concrete compression" /><DiagramLegend color="#f5941f" label="Compression steel" /><DiagramLegend color="#e05a5a" label="Tension" /><DiagramLegend color="var(--text-muted)" label="Neutral axis / dimensions" dashed /></>;
 }
 
 function DistributionArrow({ from, to, y, state, concrete = false }: { from: number; to: number; y: number; state: "tension" | "compression" | "zero"; concrete?: boolean }) {

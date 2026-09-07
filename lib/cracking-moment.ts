@@ -19,9 +19,11 @@ export interface CrackingMomentInput {
 
   fc: number;
   lambda: number;
+  Es: number;
 
   b?: number;
   h?: number;
+  /** @deprecated The modular ratio is calculated from Es/Ec. */
   modularRatio?: number;
 
   bottomBarCount?: number;
@@ -42,6 +44,9 @@ export interface CrackingMomentResult {
   reinforcementMode: ReinforcementMode;
 
   fr: number;
+  Ec: number;
+  Es: number;
+  modularRatio: number;
   As: number;
   AsPrime: number;
 
@@ -124,6 +129,7 @@ export function calculateCrackingMoment(
     reinforcementMode,
     fc,
     lambda,
+    Es,
   } = input;
 
   requirePositive(fc, "f'c");
@@ -140,6 +146,9 @@ export function calculateCrackingMoment(
 
   const fr =
     0.62 * lambda * Math.sqrt(fc);
+  const steelModulus = requirePositive(Es, "Es");
+  const Ec = 4700 * Math.sqrt(fc);
+  const calculatedModularRatio = steelModulus / Ec;
 
   if (mode === "custom") {
     const inertia = requirePositive(
@@ -167,6 +176,9 @@ export function calculateCrackingMoment(
       reinforcementMode: "none",
 
       fr,
+      Ec,
+      Es: steelModulus,
+      modularRatio: calculatedModularRatio,
       As: 0,
       AsPrime: 0,
 
@@ -218,10 +230,7 @@ export function calculateCrackingMoment(
   let dPrime = 0;
 
   if (reinforcementMode !== "none") {
-    modularRatio = requirePositive(
-      input.modularRatio,
-      "modular ratio n"
-    );
+    modularRatio = calculatedModularRatio;
 
     if (modularRatio <= 1) {
       throw new Error(
@@ -420,6 +429,9 @@ export function calculateCrackingMoment(
     reinforcementMode,
 
     fr,
+    Ec,
+    Es: steelModulus,
+    modularRatio: calculatedModularRatio,
     As,
     AsPrime,
 
@@ -462,6 +474,18 @@ export function getCrackingMomentSteps(
   result: CrackingMomentResult
 ): CrackingMomentStep[] {
   const steps: CrackingMomentStep[] = [
+    {
+      label: "Given material properties",
+      formula: "f'_c,\ E_s,\ \lambda\text{ are specified inputs}",
+      substitution: `f'_c=${fixed(input.fc)}\\text{ MPa},\\quad E_s=${fixed(result.Es, 0)}\\text{ MPa},\\quad \\lambda=${fixed(input.lambda)}`,
+      result: "Use consistent MPa and mm units throughout",
+    },
+    {
+      label: "Elastic moduli and modular ratio",
+      formula: "E_c=4700\sqrt{f'_c},\qquad n=E_s/E_c",
+      substitution: `E_c=4700\\sqrt{${fixed(input.fc)}},\\qquad E_s=${fixed(result.Es, 0)}\\text{ MPa}`,
+      result: `E_c=${fixed(result.Ec, 0)}\\text{ MPa},\\qquad n=${fixed(result.modularRatio)}`,
+    },
     {
       label: "Modulus of rupture",
 
@@ -662,10 +686,10 @@ export function getCrackingMomentSteps(
 
       substitution:
         `A_{st}=(${fixed(
-          input.modularRatio ?? 0
+          result.modularRatio
         )})(${fixed(tensionArea, 2)}),` +
         `\\qquad A_{sc}=(${fixed(
-          (input.modularRatio ?? 0) - 1
+          result.modularRatio - 1
         )})(${fixed(compressionArea, 2)})`,
 
       result:
@@ -736,6 +760,15 @@ export function getCrackingMomentSteps(
       "A_g\\left(\\dfrac h2-\\bar y\\right)^2+" +
       "A_{st}(y_{st}-\\bar y)^2+" +
       "A_{sc}(y_{sc}-\\bar y)^2",
+
+    substitution:
+      `I_{tr}=${fixed(result.grossInertia, 0)}+(${fixed(result.grossArea, 0)})\\left(${fixed(h / 2)}-${fixed(result.neutralAxisFromTop)}\\right)^2` +
+      (result.transformedTensionArea > 0
+        ? `+(${fixed(result.transformedTensionArea, 2)})\\left(${fixed(result.tensionSteelY ?? 0)}-${fixed(result.neutralAxisFromTop)}\\right)^2`
+        : "") +
+      (result.transformedCompressionArea > 0
+        ? `+(${fixed(result.transformedCompressionArea, 2)})\\left(${fixed(result.compressionSteelY ?? 0)}-${fixed(result.neutralAxisFromTop)}\\right)^2`
+        : ""),
 
     result:
       `I_{tr}=${fixed(

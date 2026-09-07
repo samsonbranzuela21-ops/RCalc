@@ -22,10 +22,10 @@ export default function CrackingMomentPage() {
     useState<ReinforcementMode>("none");
 
   const [fc, setFc] = useState("28");
+  const [Es, setEs] = useState("200000");
   const [lambda, setLambda] = useState("1.0");
   const [b, setB] = useState("300");
   const [h, setH] = useState("500");
-  const [modularRatio, setModularRatio] = useState("8");
 
   const [bottomBarCount, setBottomBarCount] = useState("3");
   const [bottomBarDiameter, setBottomBarDiameter] = useState("25");
@@ -67,11 +67,10 @@ export default function CrackingMomentPage() {
         mode === "rectangle" ? reinforcementMode : "none",
 
       fc: Number(fc),
+      Es: Number(Es),
       lambda: Number(lambda),
       b: Number(b),
       h: Number(h),
-      modularRatio: Number(modularRatio),
-
       bottomBarCount: Number(bottomBarCount),
       bottomBarDiameter: Number(bottomBarDiameter),
       topBarCount: Number(topBarCount),
@@ -162,6 +161,12 @@ export default function CrackingMomentPage() {
               onChange={setFc}
             />
 
+            <Field
+              label="Es - steel modulus (MPa)"
+              value={Es}
+              onChange={setEs}
+            />
+
             <SelectField
               label="λ - concrete factor"
               value={lambda}
@@ -226,14 +231,6 @@ export default function CrackingMomentPage() {
                     ]}
                   />
                 </div>
-
-                {reinforcementMode !== "none" && (
-                  <Field
-                    label="n = Es/Ec - modular ratio"
-                    value={modularRatio}
-                    onChange={setModularRatio}
-                  />
-                )}
 
                 {hasBottomSteel && (
                   <>
@@ -363,6 +360,21 @@ export default function CrackingMomentPage() {
                 label="Modulus of rupture, fr"
                 value={`${result.fr.toFixed(3)} MPa`}
               />
+
+              <ResultRow
+                label="Concrete modulus, Ec (NSCP 2015)"
+                value={`${result.Ec.toFixed(0)} MPa`}
+              />
+              <ResultRow
+                label="Steel modulus, Es"
+                value={`${result.Es.toFixed(0)} MPa`}
+              />
+              {mode === "rectangle" && reinforcementMode !== "none" && (
+                <ResultRow
+                  label="Modular ratio, n = Es/Ec"
+                  value={result.modularRatio.toFixed(3)}
+                />
+              )}
 
               {mode === "rectangle" && (
                 <>

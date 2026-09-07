@@ -70,8 +70,10 @@ export function CrackingMomentDiagram({
     steelY(compressionSteelY);
 
   const stressAxisX = 270;
-  const compressionX = 215;
-  const tensionX = 330;
+  // Keep the stress triangles on the same side as their labels: compression
+  // grows to the right and tension grows to the left of the neutral axis.
+  const compressionX = 330;
+  const tensionX = 215;
 
   const tensionAtBottom =
     direction === "positive";
@@ -284,8 +286,11 @@ export function CrackingMomentDiagram({
                 markerEnd="url(#cracking-dim-arrow)"
               />
               <text
-                x={tensionX + 50}
+                // Place the depth label immediately to the left of its
+                // vertical dimension line so it stays clear of the triangle.
+                x={stressAxisX - 10}
                 y={(compressionFaceY + neutralAxisY) / 2 + 3}
+                textAnchor="end"
                 fontSize="10"
                 fontWeight="600"
                 fill="var(--text)"
@@ -352,8 +357,10 @@ export function CrackingMomentDiagram({
               return (
                 <line
                   key={`${faceY}-${fraction}`}
-                  x1={isCompression ? x : stressAxisX}
-                  x2={isCompression ? stressAxisX : x}
+                  // Stress arrows point into the triangular diagram, toward
+                  // the neutral-axis side of each triangle.
+                  x1={x}
+                  x2={stressAxisX}
                   y1={y}
                   y2={y}
                   stroke={isCompression ? "#4d7cff" : "#e05a5a"}
