@@ -22,6 +22,7 @@ export const stats: StatItem[] = [
   {
     label: "NSCP · ACI 318",
     color: "text-[var(--green)]",
+    href: "/nscp-aci-318",
   },
 ];
 

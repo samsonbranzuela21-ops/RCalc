@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { Module1Lesson } from "@/components/Module1Lesson";
 import { modules } from "@/lib/data";
+import { getModule1Topic } from "@/lib/module1";
 
 export function generateStaticParams() {
   return modules.flatMap((m) =>
@@ -19,6 +21,23 @@ export default async function TopicPage({
 
   if (!module_ || !topic) {
     notFound();
+  }
+
+  if (module_.slug === "introduction-to-rc-design") {
+    const module1Topic = getModule1Topic(topic.slug);
+    if (module1Topic) {
+      const topicIndex = module_.topics.findIndex((item) => item.slug === topic.slug);
+      return (
+        <Module1Lesson
+          moduleSlug={module_.slug}
+          moduleTitle={module_.title}
+          topic={module1Topic}
+          topics={module_.topics}
+          previousTopic={module_.topics[topicIndex - 1] ?? null}
+          nextTopic={module_.topics[topicIndex + 1] ?? null}
+        />
+      );
+    }
   }
 
   return (
