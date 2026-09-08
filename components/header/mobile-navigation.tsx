@@ -18,10 +18,10 @@ export function MobileNavigation({
         aria-controls="mobile-navigation-panel"
         aria-haspopup="true"
         onClick={onToggle}
-        className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-md border border-[var(--border)] bg-[var(--bg-surface)] text-[var(--text)] hover:bg-[var(--bg-hover)]"
+        className="flex h-11 w-11 cursor-pointer items-center justify-center rounded-md border border-[var(--border)] bg-[var(--bg-surface)] text-[var(--text)] hover:bg-[var(--bg-hover)]"
       >
         <span className="sr-only">{isOpen ? "Close menu" : "Open menu"}</span>
-        <span aria-hidden="true" className="flex w-4 flex-col gap-1">
+        <span aria-hidden="true" className="flex w-5 flex-col gap-1.5">
           <span className={`h-0.5 w-full rounded-full bg-current transition-transform ${isOpen ? "translate-y-1.5 rotate-45" : ""}`} />
           <span className={`h-0.5 w-full rounded-full bg-current transition-opacity ${isOpen ? "opacity-0" : ""}`} />
           <span className={`h-0.5 w-full rounded-full bg-current transition-transform ${isOpen ? "-translate-y-1.5 -rotate-45" : ""}`} />

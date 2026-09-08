@@ -58,7 +58,7 @@ export function CalculatorsList() {
         return (
           <div key={section.label}>
             <div
-              className="border-b border-[var(--border)] bg-[var(--bg-section)] px-3 pb-1.5 pt-2.5 text-[8px] font-semibold uppercase tracking-[0.14em] sm:px-4"
+              className="border-b border-[var(--border)] bg-[var(--bg-section)] px-3 pb-2 pt-3 text-[10px] font-semibold uppercase tracking-[0.14em] sm:px-4"
               style={{ color: sectionColor }}
             >
               {section.label}

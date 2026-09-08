@@ -4,29 +4,27 @@ import { calculators, modules } from "@/lib/data";
 
 const regularNavItems = [
   { label: "Examples", href: "/examples" },
-  { label: "References", href: "/references" },
-  { label: "About", href: "/about" },
 ];
 
 export function DesktopNavigation() {
   return (
     <nav
       aria-label="Main navigation"
-      className="hidden items-center gap-5 text-[10px] text-[var(--text-muted)] md:flex"
+      className="hidden items-center gap-2 text-sm text-[var(--text-muted)] md:flex"
     >
       <Link
         href="/"
-        className="rounded bg-[#ffbd00]/10 px-2 py-1 font-semibold text-[#d99c00] hover:text-[var(--yellow)] dark:text-[#ffbd00]"
+        className="rounded-md bg-[#ffbd00]/10 px-3 py-2 font-semibold text-[#d99c00] hover:text-[var(--yellow)] dark:text-[#ffbd00]"
       >
         Home
       </Link>
 
       <details className="group relative">
-        <summary className="flex cursor-pointer list-none items-center gap-1 py-4 hover:text-[var(--text)] group-open:text-[var(--blue)] [&::-webkit-details-marker]:hidden">
+        <summary className="flex min-h-11 cursor-pointer list-none items-center gap-1 rounded-md px-3 py-2 hover:bg-[var(--bg-hover)] hover:text-[var(--text)] group-open:text-[var(--blue)] [&::-webkit-details-marker]:hidden">
           Modules
           <span
             aria-hidden="true"
-            className="text-[8px] transition-transform group-open:rotate-180"
+            className="text-[10px] transition-transform group-open:rotate-180"
           >
             ▼
           </span>
@@ -46,12 +44,12 @@ export function DesktopNavigation() {
               <Link
                 key={moduleItem.slug}
                 href={`/modules/${moduleItem.slug}`}
-                className="block rounded-md px-3 py-2.5 hover:bg-[var(--bg-hover)] active:bg-[var(--bg-hover)]"
+                className="block rounded-md px-3 py-3 hover:bg-[var(--bg-hover)] active:bg-[var(--bg-hover)]"
               >
-                <span className="block text-[10px] font-semibold text-[var(--text)]">
+                <span className="block text-sm font-semibold text-[var(--text)]">
                   Module {moduleItem.index}: {moduleItem.title}
                 </span>
-                <span className="mt-0.5 block truncate text-[8px] text-[var(--text-muted)]">
+                <span className="mt-1 block truncate text-xs text-[var(--text-muted)]">
                   {moduleItem.description}
                 </span>
               </Link>
@@ -61,11 +59,11 @@ export function DesktopNavigation() {
       </details>
 
       <details className="group relative">
-        <summary className="flex cursor-pointer list-none items-center gap-1 py-4 hover:text-[var(--text)] group-open:text-[var(--blue)] [&::-webkit-details-marker]:hidden">
+        <summary className="flex min-h-11 cursor-pointer list-none items-center gap-1 rounded-md px-3 py-2 hover:bg-[var(--bg-hover)] hover:text-[var(--text)] group-open:text-[var(--blue)] [&::-webkit-details-marker]:hidden">
           Calculators
           <span
             aria-hidden="true"
-            className="text-[8px] transition-transform group-open:rotate-180"
+            className="text-[10px] transition-transform group-open:rotate-180"
           >
             ▼
           </span>
@@ -92,12 +90,12 @@ export function DesktopNavigation() {
                     <Link
                       key={item.name}
                       href={item.href}
-                      className="block rounded-md px-3 py-2 hover:bg-[var(--bg-hover)] active:bg-[var(--bg-hover)]"
+                      className="block rounded-md px-3 py-3 hover:bg-[var(--bg-hover)] active:bg-[var(--bg-hover)]"
                     >
-                      <span className="block text-[10px] font-semibold text-[var(--text)]">
+                      <span className="block text-sm font-semibold text-[var(--text)]">
                         {item.name}
                       </span>
-                      <span className="mt-0.5 block truncate text-[8px] text-[var(--text-muted)]">
+                      <span className="mt-1 block truncate text-xs text-[var(--text-muted)]">
                         {item.description}
                       </span>
                     </Link>
@@ -105,12 +103,12 @@ export function DesktopNavigation() {
                     <div
                       key={item.name}
                       title="Coming soon"
-                      className="cursor-not-allowed rounded-md px-3 py-2 opacity-45"
+                      className="cursor-not-allowed rounded-md px-3 py-3 opacity-45"
                     >
-                      <span className="block text-[10px] font-semibold text-[var(--text)]">
+                      <span className="block text-sm font-semibold text-[var(--text)]">
                         {item.name}
                       </span>
-                      <span className="mt-0.5 block truncate text-[8px] text-[var(--text-muted)]">
+                      <span className="mt-1 block truncate text-xs text-[var(--text-muted)]">
                         {item.description}
                       </span>
                     </div>
@@ -126,7 +124,7 @@ export function DesktopNavigation() {
         <Link
           key={item.label}
           href={item.href}
-          className="hover:text-[var(--text)]"
+          className="min-h-11 rounded-md px-3 py-2 hover:bg-[var(--bg-hover)] hover:text-[var(--text)]"
         >
           {item.label}
         </Link>

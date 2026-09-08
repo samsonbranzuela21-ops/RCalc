@@ -5,8 +5,6 @@ import type { MobilePanel } from "@/components/header/mobile-navigation";
 
 const regularNavItems = [
   { label: "Examples", href: "/examples" },
-  { label: "References", href: "/references" },
-  { label: "About", href: "/about" },
 ];
 
 interface MobileMenuPanelProps {
@@ -25,12 +23,12 @@ export function MobileMenuPanel({
   if (!isOpen) return null;
 
   return (
-    <div id="mobile-navigation-panel" role="dialog" aria-label="Mobile navigation menu" className="absolute inset-x-0 top-full z-50 max-h-[calc(100vh-3rem)] overflow-y-auto border-b border-[var(--border)] bg-[var(--bg-surface)] px-3 py-2 shadow-xl md:hidden">
-      <div className="mx-auto max-w-[860px]">
+    <div id="mobile-navigation-panel" role="dialog" aria-label="Mobile navigation menu" className="absolute inset-x-0 top-full z-50 max-h-[calc(100vh-4rem)] overflow-y-auto border-b border-[var(--border)] bg-[var(--bg-surface)] px-3 py-3 shadow-xl md:hidden">
+      <div className="mx-auto max-w-6xl">
         <Link
           href="/"
           onClick={onNavigate}
-          className="block rounded-md px-3 py-3 text-[11px] font-semibold text-[var(--text)] active:bg-[var(--bg-hover)]"
+          className="flex min-h-12 items-center rounded-md px-3 py-3 text-sm font-semibold text-[var(--text)] active:bg-[var(--bg-hover)]"
         >
           Home
         </Link>
@@ -46,14 +44,14 @@ export function MobileMenuPanel({
         </div>
 
         <div className="mt-2 border-t border-[var(--border)] pt-2">
-          <p className="px-3 pb-1 pt-1 text-[8px] font-semibold uppercase tracking-[0.14em] text-[var(--text-faint)]">More</p>
+          <p className="px-3 pb-1 pt-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--text-faint)]">More</p>
           <div className="space-y-1">
             {regularNavItems.map((item) => (
               <Link
                 key={item.label}
                 href={item.href}
                 onClick={onNavigate}
-                className="block rounded-md px-3 py-3 text-[11px] font-semibold text-[var(--text)] active:scale-[0.99] active:bg-[var(--bg-hover)]"
+                className="flex min-h-12 items-center rounded-md px-3 py-3 text-sm font-semibold text-[var(--text)] active:scale-[0.99] active:bg-[var(--bg-hover)]"
               >
                 {item.label}
               </Link>
@@ -71,7 +69,7 @@ function SubmenuButton({ label, open, onClick }: { label: string; open: boolean;
       type="button"
       aria-expanded={open}
       onClick={onClick}
-      className="flex w-full items-center justify-between rounded-md px-3 py-3 text-left text-[11px] font-semibold text-[var(--text)] hover:bg-[var(--bg-hover)]"
+      className="flex min-h-12 w-full items-center justify-between rounded-md px-3 py-3 text-left text-sm font-semibold text-[var(--text)] hover:bg-[var(--bg-hover)]"
     >
       {label}
       <span aria-hidden="true" className={`text-[9px] text-[var(--text-muted)] transition-transform ${open ? "rotate-180" : ""}`}>▼</span>
@@ -85,7 +83,7 @@ function ModulesPanel({ onNavigate }: { onNavigate: () => void }) {
       <Link
         href="/modules"
         onClick={onNavigate}
-        className="mb-1 flex min-h-10 items-center justify-between rounded-md px-3 text-[11px] font-semibold text-[var(--blue)] active:bg-[var(--bg-hover)]"
+        className="mb-1 flex min-h-12 items-center justify-between rounded-md px-3 text-sm font-semibold text-[var(--blue)] active:bg-[var(--bg-hover)]"
       >
         View all modules
         <span aria-hidden="true">›</span>
@@ -98,10 +96,10 @@ function ModulesPanel({ onNavigate }: { onNavigate: () => void }) {
           onClick={onNavigate}
           className="block rounded-md px-3 py-2.5 active:scale-[0.99] active:bg-[var(--bg-hover)]"
         >
-          <span className="block text-[11px] font-semibold text-[var(--text)]">
+          <span className="block text-sm font-semibold text-[var(--text)]">
             Module {moduleItem.index}: {moduleItem.title}
           </span>
-          <span className="mt-0.5 block truncate text-[9px] text-[var(--text-muted)]">
+          <span className="mt-1 block truncate text-xs text-[var(--text-muted)]">
             {moduleItem.description}
           </span>
         </Link>
@@ -116,7 +114,7 @@ function CalculatorsPanel({ onNavigate }: { onNavigate: () => void }) {
       <Link
         href="/calculators"
         onClick={onNavigate}
-        className="mb-1 flex min-h-10 items-center justify-between rounded-md px-3 text-[11px] font-semibold text-[var(--blue)] active:bg-[var(--bg-hover)]"
+        className="mb-1 flex min-h-12 items-center justify-between rounded-md px-3 text-sm font-semibold text-[var(--blue)] active:bg-[var(--bg-hover)]"
       >
         View all calculators
         <span aria-hidden="true">›</span>
@@ -124,7 +122,7 @@ function CalculatorsPanel({ onNavigate }: { onNavigate: () => void }) {
 
       {calculators.map((section) => (
         <div key={section.label} className="py-1">
-          <p className="px-3 pb-1 pt-2 text-[8px] font-semibold uppercase tracking-[0.14em] text-[var(--text-faint)]">
+          <p className="px-3 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--text-faint)]">
             {section.label}
           </p>
 
@@ -136,10 +134,10 @@ function CalculatorsPanel({ onNavigate }: { onNavigate: () => void }) {
                 onClick={onNavigate}
                 className="block rounded-md px-3 py-2.5 active:scale-[0.99] active:bg-[var(--bg-hover)]"
               >
-                <span className="block text-[11px] font-semibold text-[var(--text)]">
+                <span className="block text-sm font-semibold text-[var(--text)]">
                   {item.name}
                 </span>
-                <span className="mt-0.5 block truncate text-[9px] text-[var(--text-muted)]">
+                <span className="mt-1 block truncate text-xs text-[var(--text-muted)]">
                   {item.description}
                 </span>
               </Link>
@@ -149,10 +147,10 @@ function CalculatorsPanel({ onNavigate }: { onNavigate: () => void }) {
                 title="Coming soon"
                 className="cursor-not-allowed rounded-md px-3 py-2.5 opacity-45"
               >
-                <span className="block text-[11px] font-semibold text-[var(--text)]">
+                <span className="block text-sm font-semibold text-[var(--text)]">
                   {item.name}
                 </span>
-                <span className="mt-0.5 block truncate text-[9px] text-[var(--text-muted)]">
+                <span className="mt-1 block truncate text-xs text-[var(--text-muted)]">
                   {item.description}
                 </span>
               </div>

@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import { modules } from "@/lib/data";
+import { catalogModules } from "@/lib/modules";
 import { PresetBox } from "@/components/PresetBox";
 import { PresetText } from "@/components/PresetText";
 
@@ -12,9 +12,10 @@ const numeralColors = [
   "var(--teal)",
   "var(--blue)",
   "var(--purple)",
+  "var(--teal)",
 ];
 
-const ROMAN = ["I", "II", "III", "IV", "V", "VI", "VII"];
+const ROMAN = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII"];
 
 export function ModulesList() {
   return (
@@ -24,8 +25,8 @@ export function ModulesList() {
       className="w-full flex-1 overflow-hidden rounded-lg border md:w-auto"
     >
       {/* Header */}
-      <div className="flex items-center gap-2 border-b border-[var(--border)] px-4 py-3">
-        <span className="h-1.5 w-1.5 rounded-full bg-[var(--yellow)]" />
+      <div className="flex items-center gap-2.5 border-b border-[var(--border)] px-5 py-4">
+        <span className="h-2 w-2 rounded-full bg-[var(--yellow)]" />
 
         <PresetText
           preset="sectionLabel"
@@ -35,20 +36,20 @@ export function ModulesList() {
           <span className="text-[var(--yellow)]">Learning Modules</span>
         </PresetText>
 
-        <span className="rounded-full bg-[var(--badge-bg)] px-1.5 py-0.5 text-[8px] font-semibold text-[var(--text-muted)]">
-          {modules.length}
+        <span className="rounded-full bg-[var(--badge-bg)] px-2 py-0.5 text-xs font-semibold text-[var(--text-muted)]">
+          {catalogModules.length}
         </span>
 
         <Link
           href="/modules"
-          className="ml-auto text-[10px] font-semibold text-[var(--text-muted)] hover:text-[var(--yellow)]"
+          className="ml-auto rounded px-2 py-1 text-sm font-semibold text-[var(--text-muted)] hover:bg-[var(--bg-hover)] hover:text-[var(--yellow)]"
         >
           All ›
         </Link>
       </div>
 
       {/* Module rows */}
-      {modules.map((moduleItem) => {
+      {catalogModules.map((moduleItem) => {
         const color =
           numeralColors[(moduleItem.index - 1) % numeralColors.length];
 
@@ -56,10 +57,10 @@ export function ModulesList() {
           <Link
             key={moduleItem.index}
             href={`/modules/${moduleItem.slug}`}
-            className="group flex items-center gap-3 border-b border-[var(--border)] px-4 py-3 last:border-b-0 hover:bg-[var(--bg-hover)]"
+            className="group flex min-h-16 items-center gap-3 border-b border-[var(--border)] px-5 py-4 last:border-b-0 hover:bg-[var(--bg-hover)]"
           >
             <span
-              className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md border text-[10px] font-bold"
+              className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-md border text-xs font-bold"
               style={{
                 color,
                 borderColor: `color-mix(in srgb, ${color} 45%, transparent)`,

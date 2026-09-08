@@ -22,7 +22,7 @@ return null;
 }
 
 const className =
-"fixed left-4 top-[3.25rem] z-40 mt-2 inline-flex h-8 w-8 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--bg-surface)] text-[var(--text-muted)] shadow-sm transition hover:text-[var(--text)] hover:shadow-md active:scale-95";
+"fixed left-4 top-[4rem] z-40 mt-2 inline-flex h-8 w-8 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--bg-surface)] text-[var(--text-muted)] shadow-sm transition hover:text-[var(--text)] hover:shadow-md active:scale-95";
 
 if (href) {
 return (

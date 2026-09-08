@@ -1,11 +1,11 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { modules } from "@/lib/data";
+import { catalogModules } from "@/lib/modules";
 
-const ROMAN = ["I", "II", "III", "IV", "V", "VI", "VII"];
+const ROMAN = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII"];
 
 export function generateStaticParams() {
-  return modules.map((m) => ({ slug: m.slug }));
+  return catalogModules.map((m) => ({ slug: m.slug }));
 }
 
 export default async function ModulePage({
@@ -14,13 +14,13 @@ export default async function ModulePage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const module_ = modules.find((m) => m.slug === slug);
+  const module_ = catalogModules.find((m) => m.slug === slug);
 
   if (!module_) {
     notFound();
   }
 
-  const nextModule = modules.find((m) => m.index === module_.index + 1);
+  const nextModule = catalogModules.find((m) => m.index === module_.index + 1);
 
   return (
     <div className="min-h-screen bg-[var(--bg)] px-5 py-10 text-[var(--text)]">
@@ -46,16 +46,11 @@ export default async function ModulePage({
             <ul>
               {module_.topics.map((t) => (
                 <li key={t.slug} className="border-b border-[var(--border)] last:border-b-0">
-                  <Link
-                    href={`/modules/${module_.slug}/${t.slug}`}
+                  <div
                     className="flex items-center gap-3 px-4 py-3 hover:bg-[var(--border)]/30"
                   >
-                    <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full border border-[#f5941f] text-[10px] text-[#f5941f]">
-                      ✓
-                    </span>
                     <span className="flex-1 text-[12px] font-medium text-[#4d7cff]">{t.title}</span>
-                    <span className="text-[13px] text-[var(--text-muted)]">›</span>
-                  </Link>
+                  </div>
                 </li>
               ))}
             </ul>

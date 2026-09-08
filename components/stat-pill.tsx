@@ -12,14 +12,14 @@ export function StatPill({
   href,
 }: StatPillProps) {
   const className = `
-    inline-flex min-h-7 items-center justify-center
+    inline-flex min-h-9 items-center justify-center
     rounded-md
     border border-[var(--hero-pill-border)]
     bg-[var(--hero-pill-bg)]
-    px-3 py-1
-    text-[9px] font-medium
+    px-4 py-1.5
+    text-xs font-medium
     shadow-sm
-    sm:text-[10px]
+    sm:text-sm
     ${color}
     ${
       href

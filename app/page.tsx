@@ -7,7 +7,7 @@ export default function Home() {
     <main className="min-h-screen bg-[var(--bg)] text-[var(--text)]">
       <HeroSection />
 
-      <div className="mx-auto flex max-w-[860px] flex-col items-start gap-4 px-5 pb-16 md:flex-row">
+      <div className="mx-auto grid w-full max-w-6xl grid-cols-1 items-start gap-6 px-4 pb-20 sm:px-6 lg:grid-cols-2 lg:px-8">
         <ModulesList />
         <CalculatorsList />
       </div>

@@ -94,12 +94,12 @@ export const textPresets: Record<TextPresetName, TextPreset> = {
 
   sectionLabel: {
     mobile: {
-      fontSize: "10px",
+      fontSize: "13px",
       color: "var(--text)",
       fontWeight: 700,
     },
     desktop: {
-      fontSize: "10px",
+      fontSize: "14px",
       color: "var(--text)",
       fontWeight: 700,
     },
@@ -107,12 +107,12 @@ export const textPresets: Record<TextPresetName, TextPreset> = {
 
   itemTitle: {
     mobile: {
-      fontSize: "11px",
+      fontSize: "14px",
       color: "var(--text)",
       fontWeight: 600,
     },
     desktop: {
-      fontSize: "11px",
+      fontSize: "15px",
       color: "var(--text)",
       fontWeight: 600,
     },
@@ -120,12 +120,12 @@ export const textPresets: Record<TextPresetName, TextPreset> = {
 
   itemDescription: {
     mobile: {
-      fontSize: "9px",
+      fontSize: "12px",
       color: "var(--text-muted)",
       fontWeight: 400,
     },
     desktop: {
-      fontSize: "9px",
+      fontSize: "13px",
       color: "var(--text-muted)",
       fontWeight: 400,
     },

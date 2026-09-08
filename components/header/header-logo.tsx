@@ -11,13 +11,13 @@ export function HeaderLogo({
     <Link
       href="/"
       onClick={onNavigate}
-      className="flex flex-shrink-0 items-center gap-1.5 text-[12px] font-bold text-[var(--text)]"
+      className="flex min-h-11 flex-shrink-0 items-center gap-2 rounded-md px-1 text-base font-bold text-[var(--text)]"
     >
-      <span className="flex h-5 w-5 items-center justify-center rounded bg-[#ffbd00] text-[#171200]">
+      <span className="flex h-8 w-8 items-center justify-center rounded-md bg-[#ffbd00] text-[#171200]">
         <img
           src="/rcalc-icon.svg"
           alt="RCalc logo"
-          className="h-5 w-5"
+          className="h-8 w-8"
         />
       </span>
 
