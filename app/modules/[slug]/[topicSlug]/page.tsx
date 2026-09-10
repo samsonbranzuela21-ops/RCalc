@@ -2,9 +2,11 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { catalogModules } from "@/lib/modules";
 
+const MODULE1_SLUG = "introduction-to-rc-design";
+
 export function generateStaticParams() {
-  return catalogModules.flatMap((m) =>
-    m.topics.map((t) => ({ slug: m.slug, topicSlug: t.slug }))
+  return catalogModules.filter((module_) => module_.slug !== MODULE1_SLUG).flatMap((module_) =>
+    module_.topics.map((topic) => ({ slug: module_.slug, topicSlug: topic.slug }))
   );
 }
 
@@ -18,6 +20,10 @@ export default async function TopicPage({
   const topic = module_?.topics.find((t) => t.slug === topicSlug);
 
   if (!module_ || !topic) {
+    notFound();
+  }
+
+  if (module_.slug === MODULE1_SLUG) {
     notFound();
   }
 

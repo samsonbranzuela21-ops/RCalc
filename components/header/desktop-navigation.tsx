@@ -10,11 +10,11 @@ export function DesktopNavigation() {
   return (
     <nav
       aria-label="Main navigation"
-      className="hidden items-center gap-2 text-sm text-[var(--text-muted)] md:flex"
+      className="hidden h-11 items-center gap-2 text-sm text-[var(--text-muted)] md:flex"
     >
       <Link
         href="/"
-        className="rounded-md bg-[#ffbd00]/10 px-3 py-2 font-semibold text-[#d99c00] hover:text-[var(--yellow)] dark:text-[#ffbd00]"
+        className="flex min-h-11 items-center rounded-md bg-[#ffbd00]/10 px-3 py-2 font-semibold text-[#d99c00] hover:text-[var(--yellow)] dark:text-[#ffbd00]"
       >
         Home
       </Link>
@@ -124,7 +124,7 @@ export function DesktopNavigation() {
         <Link
           key={item.label}
           href={item.href}
-          className="min-h-11 rounded-md px-3 py-2 hover:bg-[var(--bg-hover)] hover:text-[var(--text)]"
+          className="flex min-h-11 items-center rounded-md px-3 py-2 hover:bg-[var(--bg-hover)] hover:text-[var(--text)]"
         >
           {item.label}
         </Link>

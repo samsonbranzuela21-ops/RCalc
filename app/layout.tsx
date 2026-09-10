@@ -4,13 +4,12 @@ import "katex/dist/katex.min.css";
 import type { ReactNode } from "react";
 
 import { Providers } from "./providers";
-import { SiteHeader } from "@/components/site-header";
-import { SiteFooter } from "@/components/site-footer";
-import { BackButton } from "@/components/BackButton";
-import { ThemeToggle } from "@/components/ThemeToggle";
+import { SiteHeader } from "@/components/layout/site-header";
+import { SiteFooter } from "@/components/layout/site-footer";
+import { BackButton } from "@/components/shared/BackButton";
 
 export const metadata = {
-  title: "RCalc | Reinforced Concrete Design",
+  title: "RCalcs | Reinforced Concrete Design",
   description:
     "Web-based learning platform for Reinforced Concrete Design.",
 };
@@ -29,10 +28,6 @@ export default function RootLayout({
           <BackButton />
 
           {children}
-
-          <div className="fixed bottom-4 left-4 z-50">
-            <ThemeToggle />
-          </div>
 
           <SiteFooter />
         </Providers>

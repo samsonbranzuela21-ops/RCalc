@@ -1,3 +1,5 @@
+import Image from "next/image";
+
 interface Person {
   name: string;
   photo?: string;
@@ -30,7 +32,7 @@ const developers: Person[] = [
 ];
 
 const adviser: Person = {
-  name: "Engr. Mark Vincent C. Garrido",
+  name: "Engr. Mark Vincent R. Garrido",
   photo: "/adviser.jpg",
   program: "Faculty, Civil Engineering Department",
   school: "South East Asian Institute of Technology (SEAIT)",
@@ -50,9 +52,11 @@ function PersonCard({ person }: { person: Person }) {
     <div className="flex flex-col items-center text-center">
       <div className="flex h-28 w-28 items-center justify-center rounded-full border-4 border-[#4d7cff] bg-[var(--bg-surface)] text-[24px] font-bold text-[var(--text-muted)]">
         {person.photo ? (
-          <img
+          <Image
             src={person.photo}
             alt={person.name}
+            width={112}
+            height={112}
             className="h-full w-full rounded-full object-cover"
           />
         ) : (

@@ -190,9 +190,7 @@ export function getDeflectionSolutionSteps(
   input: DeflectionInput,
   r: DeflectionResult
 ): DeflectionSolutionStep[] {
-  const { L, b, h, d, fc, As, wD, wL } = input;
-  const Lmm = L * 1000;
-
+  const { b, h, d, fc, As, wD, wL } = input;
   const steps: DeflectionSolutionStep[] = [
     {
       label: "Modulus of elasticity, Ec, and modular ratio, n",

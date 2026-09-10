@@ -1,4 +1,4 @@
-import { CalculatorCatalogCard } from "@/components/calculator-catalog-card";
+import { CalculatorCatalogCard } from "@/components/calculators/catalog/calculator-catalog-card";
 import { calculators } from "@/lib/data";
 
 const sectionColors: Record<string, string> = {

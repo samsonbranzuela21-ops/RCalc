@@ -45,12 +45,12 @@ export default function AboutPage() {
             </p>
 
             <h1 className="mt-3 text-[28px] font-extrabold tracking-[-0.03em] sm:text-[38px]">
-              About <span className="text-[var(--blue)]">RCalc</span>
+              About <span className="text-[var(--blue)]">RCalcs</span>
             </h1>
 
             <p className="mt-5 text-[13px] leading-7 text-[var(--text-muted)] sm:text-[15px]">
               <strong className="font-bold text-[var(--text)]">
-                <span className="text-[var(--orange)]">RC</span>alc
+                <span className="text-[var(--orange)]">RC</span>alcs
               </strong>{" "}
               is a web-based learning platform developed to support Civil
               Engineering students in studying Reinforced Concrete Design. It
@@ -110,7 +110,7 @@ export default function AboutPage() {
         </section>
 
         <p className="mx-auto mt-6 max-w-[720px] text-center text-[10px] leading-5 text-[var(--text-faint)]">
-          RCalc is intended for learning and academic use. Final engineering
+          RCalcs is intended for learning and academic use. Final engineering
           designs must still be checked by a qualified professional using the
           complete official design standards.
         </p>

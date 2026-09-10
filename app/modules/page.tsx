@@ -1,4 +1,4 @@
-import { ModuleCatalogCard } from "@/components/module-catalog-card";
+import { ModuleCatalogCard } from "@/components/modules/module-catalog-card";
 import { catalogModules } from "@/lib/modules";
 
 const moduleColors = [
