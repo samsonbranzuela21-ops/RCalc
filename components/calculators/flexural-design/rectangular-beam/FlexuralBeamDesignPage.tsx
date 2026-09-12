@@ -1,353 +1,214 @@
 "use client";
 
-import { useState } from "react";
+import Link from "next/link";
+import { useState, type ReactNode } from "react";
 import { InlineKatex } from "@/components/shared/Katex";
 import { FlexuralBeamDiagram } from "@/components/calculators/flexural-design/rectangular-beam/FlexuralBeamDiagram";
-import {
-  designSinglyReinforcedBeam,
-  getSolutionSteps,
-  type FlexuralBeamResult,
-  type SolutionStep,
-} from "@/lib/flexural-beam";
+import { designSinglyReinforcedBeam, getDesignSolutionSteps, getReinforcementLayoutCapacity, type FlexuralBeamInput, type FlexuralBeamResult, type SolutionStep } from "@/lib/flexural-beam";
 
 const barSizes = [12, 16, 20, 25, 28, 32];
 
 export default function FlexuralBeamDesignPage() {
   const [Mu, setMu] = useState("180");
   const [b, setB] = useState("300");
-  const [d, setD] = useState("450");
+  const [h, setH] = useState("510");
+  const [cover, setCover] = useState("40");
+  const [stirrupDiameter, setStirrupDiameter] = useState("10");
+  const [aggregateSize, setAggregateSize] = useState("19");
   const [fc, setFc] = useState("28");
   const [fy, setFy] = useState("420");
+  const [Es, setEs] = useState("200000");
   const [barDiameter, setBarDiameter] = useState(20);
-  const [dPrime, setDPrime] = useState("60");
   const [compressionBarDiameter, setCompressionBarDiameter] = useState(20);
   const [result, setResult] = useState<FlexuralBeamResult | null>(null);
   const [steps, setSteps] = useState<SolutionStep[]>([]);
   const [showSolution, setShowSolution] = useState(false);
   const [inputError, setInputError] = useState("");
 
+  function invalidateResult() { setResult(null); setSteps([]); setShowSolution(false); setInputError(""); }
+  function update<T>(setter: (value: T) => void, value: T) { setter(value); invalidateResult(); }
+
   function handleCalculate() {
-    const parsed = {
-      Mu: parseFloat(Mu),
-      b: parseFloat(b),
-      d: parseFloat(d),
-      fc: parseFloat(fc),
-      fy: parseFloat(fy),
-      barDiameter,
-      dPrime: parseFloat(dPrime),
-      compressionBarDiameter,
+    const input: FlexuralBeamInput = {
+      Mu: Number(Mu), b: Number(b), h: Number(h), cover: Number(cover),
+      stirrupDiameter: Number(stirrupDiameter), aggregateSize: Number(aggregateSize),
+      fc: Number(fc), fy: Number(fy), Es: Number(Es), barDiameter, compressionBarDiameter,
     };
-
-    if (Object.values(parsed).some((value) => !Number.isFinite(value) || value <= 0)) {
-      setInputError("Enter a positive number in every field.");
-      setResult(null);
-      setSteps([]);
-      return;
+    try {
+      const computed = designSinglyReinforcedBeam(input);
+      setResult(computed);
+      setSteps(getDesignSolutionSteps(input, computed));
+      setInputError("");
+      setShowSolution(false);
+    } catch (error) {
+      setInputError(error instanceof Error ? error.message : "Check the entered values and try again.");
+      setResult(null); setSteps([]);
     }
-
-    if (parsed.dPrime >= parsed.d) {
-      setInputError("d′ must be smaller than d.");
-      setResult(null);
-      setSteps([]);
-      return;
-    }
-
-    setInputError("");
-    const computed = designSinglyReinforcedBeam(parsed);
-    setResult(computed);
-    setSteps(getSolutionSteps(parsed, computed));
-    setShowSolution(false);
   }
 
   return (
-    <div className="min-h-screen bg-[var(--bg)] px-5 py-10 text-[var(--text)]">
+    <div className="min-h-screen bg-[var(--bg)] px-4 py-8 text-[var(--text)] sm:px-5 sm:py-10">
       <div className="mx-auto min-w-0 max-w-6xl">
-        <h1 className="text-2xl font-bold">Flexural Beam Design</h1>
-        <p className="mt-1 text-[12px] text-[var(--text-muted)]">
-          Singly or doubly reinforced rectangular beam — NSCP 2015 strength design method.
-        </p>
-
-        <div className="mt-6 grid grid-cols-2 gap-3 rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] p-4 sm:p-5">
-          <Field label="Mu — factored moment (kN·m)" value={Mu} onChange={setMu} />
-          <Field label="b — width (mm)" value={b} onChange={setB} />
-          <Field label="d — effective depth (mm)" value={d} onChange={setD} />
-          <Field label="f'c (MPa)" value={fc} onChange={setFc} />
-          <Field label="fy (MPa)" value={fy} onChange={setFy} />
-
-          <BarSelect
-            label="Tension bar diameter (mm)"
-            value={barDiameter}
-            onChange={setBarDiameter}
-          />
-
-          <div className="col-span-full mt-1 border-t border-[var(--border)] pt-3">
-            <p className="text-[10px] font-semibold text-[var(--text)]">
-              Doubly reinforced inputs
-            </p>
-            <p className="mt-0.5 text-[9px] text-[var(--text-muted)]">
-              These values are used only when the singly reinforced limit is exceeded.
-            </p>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h1 className="text-2xl font-bold">Flexural Beam Design</h1>
+            <p className="mt-1 text-xs text-[var(--text-muted)]">Design the required longitudinal reinforcement and bar spacing for a rectangular beam.</p>
           </div>
-
-          <Field label="d′ — compression steel depth (mm)" value={dPrime} onChange={setDPrime} />
-          <BarSelect
-            label="Compression bar diameter (mm)"
-            value={compressionBarDiameter}
-            onChange={setCompressionBarDiameter}
-          />
+          <Link href="/calculators/beam-capacity-check" className="text-xs font-semibold text-[#f5941f] underline underline-offset-4">Need section analysis? Open Beam Capacity Check</Link>
         </div>
 
-        {inputError && (
-          <div className="mt-3 rounded-md bg-[#e05353]/15 px-3 py-2 text-[11px] font-semibold text-[#e05353]">
-            {inputError}
+        <div className="mt-6 grid grid-cols-1 gap-3 rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] p-4 sm:grid-cols-2 sm:p-5">
+          <Field label="Factored moment, Mu (kN·m)" value={Mu} onChange={(v) => update(setMu, v)} />
+          <Field label="Beam width, b (mm)" value={b} onChange={(v) => update(setB, v)} />
+          <Field label="Overall height, h (mm)" value={h} onChange={(v) => update(setH, v)} />
+          <Field label="Clear cover to stirrup, Cc (mm)" value={cover} onChange={(v) => update(setCover, v)} />
+          <Field label="Stirrup diameter (mm)" value={stirrupDiameter} onChange={(v) => update(setStirrupDiameter, v)} />
+          <Field label="Maximum nominal aggregate size (mm)" value={aggregateSize} onChange={(v) => update(setAggregateSize, v)} />
+          <Field label="Concrete strength, f′c (MPa)" value={fc} onChange={(v) => update(setFc, v)} />
+          <Field label="Steel yield strength, fy (MPa)" value={fy} onChange={(v) => update(setFy, v)} />
+          <Field label="Steel modulus, Es (MPa)" value={Es} onChange={(v) => update(setEs, v)} />
+          <BarSelect label="Tension-bar diameter (mm)" value={barDiameter} onChange={(v) => update(setBarDiameter, v)} />
+          <div className="col-span-full rounded-lg border border-[var(--border)] p-3">
+            <p className="text-[11px] font-semibold">Compression-bar size for a doubly reinforced design</p>
+            <p className="mt-1 text-[10px] text-[var(--text-muted)]">Used only when the singly reinforced portion cannot carry the required design moment.</p>
+            <div className="mt-2 max-w-sm"><BarSelect label="Compression-bar diameter (mm)" value={compressionBarDiameter} onChange={(v) => update(setCompressionBarDiameter, v)} /></div>
           </div>
-        )}
+          <p className="col-span-full text-[10px] leading-relaxed text-[var(--text-muted)]">One cover value is used on all faces and is measured to the outside of the stirrup. Design equations and detailing checks follow NSCP 2015 / ACI 318-14. The adopted design limit is <InlineKatex math="\rho_{max}=0.025" />.</p>
+        </div>
 
-        <button
-          onClick={handleCalculate}
-          className="mt-4 w-full rounded-md bg-[#f5941f] px-4 py-2.5 text-[12px] font-semibold text-[#1a1300]"
-        >
-          Calculate
-        </button>
+        {inputError && <div role="alert" className="mt-3 rounded-md bg-[#e05353]/15 px-3 py-2 text-xs font-semibold text-[#e05353]">{inputError}</div>}
+        <button type="button" onClick={handleCalculate} className="mt-4 w-full rounded-md bg-[#f5941f] px-4 py-2.5 text-xs font-semibold text-[#1a1300] transition hover:brightness-105">Design Reinforcement</button>
 
-        {result && (
-          <div className="mt-6 rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] p-4 sm:p-5">
-            <div
-              className={`mb-3 rounded-md px-3 py-2 text-[11px] font-semibold ${
-                result.ok
-                  ? "bg-[#39c98a]/15 text-[#39c98a]"
-                  : "bg-[#f5941f]/15 text-[#f5941f]"
-              }`}
-            >
-              {result.message}
-            </div>
-
-            <FlexuralBeamDiagram
-              b={parseFloat(b)}
-              d={parseFloat(d)}
-              barDiameter={barDiameter}
-              barsRequired={result.barsRequired}
-              clearSpacing={result.clearSpacing}
-              spacingOk={result.spacingOk}
-              tensionBarsPerLayer={result.tensionBarsPerLayer}
-              dPrime={result.dPrime}
-              c={result.c}
-              a={result.a}
-              compressionBarDiameter={compressionBarDiameter}
-              compressionBarsRequired={result.compressionBarsRequired}
-              compressionClearSpacing={result.compressionClearSpacing}
-              compressionSpacingOk={result.compressionSpacingOk}
-              compressionBarsPerLayer={result.compressionBarsPerLayer}
-            />
-
-            <div className="mt-4">
-              <ResultRow
-                label="Section type"
-                value={result.sectionType === "doubly" ? "Doubly reinforced" : "Singly reinforced"}
-                bold
-              />
-              <ResultRow label="Rn (required)" value={`${result.Rn.toFixed(3)} MPa`} />
-              <ResultRow label="β1" value={result.beta1.toFixed(3)} />
-              <ResultRow
-                label="ρ required"
-                value={Number.isFinite(result.rhoRequired) ? result.rhoRequired.toFixed(5) : "Beyond singly limit"}
-              />
-              <ResultRow label="ρmin" value={result.rhoMin.toFixed(5)} />
-              <ResultRow label="ρmax" value={result.rhoMax.toFixed(5)} />
-              <ResultRow
-                label="As required by singly equation"
-                value={Number.isFinite(result.asRequired) ? `${result.asRequired.toFixed(0)} mm²` : "Beyond singly limit"}
-              />
-              <ResultRow label="As,min" value={`${result.asMin.toFixed(0)} mm²`} />
-              <ResultRow label="As,max" value={`${result.asMax.toFixed(0)} mm²`} />
-
-              {result.sectionType === "singly" ? (
-                <>
-                  <ResultRow label="As final (governing)" value={`${result.asFinal.toFixed(0)} mm²`} bold />
-                  <ResultRow label="Bars required" value={`${result.barsRequired} × ${barDiameter}mm`} bold />
-                  <ResultRow
-                    label="Bar arrangement"
-                    value={`${result.tensionBarsPerLayer.join(" + ")} bar(s) — ${result.tensionBarLayers} layer(s)`}
-                    bold
-                  />
-                </>
-              ) : (
-                <>
-                  <ResultRow label="d′" value={`${result.dPrime?.toFixed(1)} mm`} />
-                  <ResultRow label="a" value={`${result.a?.toFixed(2)} mm`} />
-                  <ResultRow label="c" value={`${result.c?.toFixed(2)} mm`} />
-                  <ResultRow label="As1 — singly portion" value={`${result.asSinglyPortion?.toFixed(0)} mm²`} />
-                  <ResultRow label="φMn1" value={`${((result.mnSingly ?? 0) * 0.9).toFixed(2)} kN·m`} />
-                  <ResultRow label="Mu2 — remaining moment" value={`${result.muRemaining?.toFixed(2)} kN·m`} />
-                  <ResultRow label="ε′s" value={result.epsilonSPrime?.toFixed(6) ?? "N/A"} />
-                  <ResultRow label="f′s" value={`${result.fsPrime?.toFixed(2) ?? "N/A"} MPa`} />
-                  <ResultRow
-                    label="Compression steel yielding"
-                    value={result.compressionSteelYields === null ? "N/A" : result.compressionSteelYields ? "YES" : "NO"}
-                    bold
-                  />
-                  <ResultRow label="As2 — additional tension steel" value={result.asAdditionalTension === null ? "N/A" : `${result.asAdditionalTension.toFixed(0)} mm²`} />
-                  <ResultRow label="As — total tension steel" value={`${result.asFinal.toFixed(0)} mm²`} bold />
-                  <ResultRow label="A′s — compression steel" value={result.asCompression === null ? "N/A" : `${result.asCompression.toFixed(0)} mm²`} bold />
-                  <ResultRow label="Tension bars required" value={`${result.barsRequired} × ${barDiameter}mm`} bold />
-                  <ResultRow
-                    label="Tension-bar arrangement"
-                    value={`${result.tensionBarsPerLayer.join(" + ")} bar(s) — ${result.tensionBarLayers} layer(s)`}
-                    bold
-                  />
-                  <ResultRow label="Compression bars required" value={result.compressionBarsRequired > 0 ? `${result.compressionBarsRequired} × ${compressionBarDiameter}mm` : "N/A"} bold />
-                  {result.compressionBarsRequired > 0 && (
-                    <ResultRow
-                      label="Compression-bar arrangement"
-                      value={`${result.compressionBarsPerLayer.join(" + ")} bar(s) — ${result.compressionBarLayers} layer(s)`}
-                      bold
-                    />
-                  )}
-                </>
-              )}
-
-              {result.spacingOk !== null && (
-                <ResultRow
-                  label="Tension-bar spacing (NSCP 2015 §25.2.1)"
-                  value={
-                    result.clearSpacing !== null
-                      ? `${result.clearSpacing.toFixed(1)} mm ${result.spacingOk ? "≥" : "<"} ${result.minClearSpacingRequired.toFixed(0)} mm req'd — ${result.spacingOk ? "OK" : "NOT OK"}`
-                      : result.tensionBarLayers === 2
-                        ? `${result.tensionVerticalClearSpacing?.toFixed(0)} mm vertical — OK`
-                        : "N/A"
-                  }
-                  bold
-                />
-              )}
-
-              {result.sectionType === "doubly" && result.compressionSpacingOk !== null && (
-                <ResultRow
-                  label="Compression-bar spacing"
-                  value={
-                    result.compressionClearSpacing !== null
-                      ? `${result.compressionClearSpacing.toFixed(1)} mm — ${result.compressionSpacingOk ? "OK" : "NOT OK"}`
-                      : result.compressionBarLayers === 2
-                        ? `${result.compressionVerticalClearSpacing?.toFixed(0)} mm vertical — OK`
-                        : "N/A"
-                  }
-                  bold
-                />
-              )}
-            </div>
-          </div>
-        )}
-
-        {result && (result.spacingOk === false || result.compressionSpacingOk === false) && (
-          <div className="mt-3 space-y-1 rounded-md bg-[#e05353]/15 px-3 py-2 text-[11px] font-semibold text-[#e05353]">
-            {result.spacingOk === false && <p>Tension bars: {result.spacingMessage}</p>}
-            {result.compressionSpacingOk === false && <p>Compression bars: {result.compressionSpacingMessage}</p>}
-          </div>
-        )}
-
-        {result && steps.length > 0 && (
-          <div className="mt-3">
-            <button
-              onClick={() => setShowSolution((shown) => !shown)}
-              className="text-[11px] font-semibold text-[#f5941f] underline"
-            >
-              {showSolution ? "Hide full solution" : "Show full solution"}
-            </button>
-
-            {showSolution && (
-              <div className="mt-3 space-y-4 rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] p-4 sm:p-5">
-                {steps.map((step, index) => (
-                  <div key={index} className="rounded-md border border-[var(--border)] bg-[var(--bg)] p-3">
-                    <div className="flex items-center gap-2">
-                      <span className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-[#f5941f] text-[10px] font-bold text-[#1a1300]">
-                        {index + 1}
-                      </span>
-                      <p className="text-[11px] font-semibold text-[var(--text)]">{step.label}</p>
-                    </div>
-
-                    <div className="mt-2 space-y-1.5 pl-7">
-                      <div className="overflow-x-auto rounded bg-[var(--bg-surface)] px-2 py-1.5 text-[var(--text)]">
-                        <InlineKatex math={step.formula} />
-                      </div>
-                      {step.substitution && (
-                        <div className="overflow-x-auto text-[var(--text-muted)]">
-                          <InlineKatex math={step.substitution} />
-                        </div>
-                      )}
-                      <div className="mt-1.5 inline-block rounded bg-[#39c98a]/15 px-2 py-1 text-[#39c98a]">
-                        <InlineKatex math={step.result} />
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
+        {result && <DesignResult result={result} />}
+        {result && steps.length > 0 && <div className="mt-3">
+          <button type="button" onClick={() => setShowSolution((v) => !v)} className="text-xs font-semibold text-[#f5941f] underline underline-offset-4" aria-expanded={showSolution}>{showSolution ? "Hide full design solution" : "Show full design solution"}</button>
+          {showSolution && <ManualSolution steps={steps} />}
+        </div>}
       </div>
     </div>
   );
 }
 
-function Field({
-  label,
-  value,
-  onChange,
-}: {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-}) {
-  return (
-    <div>
-      <label className="mb-1 block text-[10px] font-medium text-[var(--text-muted)]">{label}</label>
-      <input
-        type="number"
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        className="w-full rounded-md border border-[var(--border)] bg-[var(--bg)] px-2 py-1.5 text-[12px] text-[var(--text)]"
-      />
+function DesignResult({ result }: { result: FlexuralBeamResult }) {
+  return <section className="mt-6 rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] p-4 sm:p-5" aria-label="Flexural design result">
+    <div className={`rounded-lg border px-4 py-3 ${result.ok ? "border-[#39c98a]/40 bg-[#39c98a]/10" : "border-[#e05353]/40 bg-[#e05353]/10"}`}>
+      <p className={`text-xs font-bold ${result.ok ? "text-[#21875c] dark:text-[#39c98a]" : "text-[#e05353]"}`}>{result.ok ? "DESIGN COMPLETE" : "DESIGN NOT FEASIBLE"}</p>
+      <p className="mt-1 text-sm font-semibold">{result.ok ? `${result.sectionType === "doubly" ? "Doubly" : "Singly"} reinforced beam: use ${barSchedule(result.tensionBarsPerLayer, result.input.barDiameter)} at the bottom${result.compressionBarsRequired > 0 ? ` and ${barSchedule(result.compressionBarsPerLayer, result.input.compressionBarDiameter)} at the top` : ""}.` : result.message}</p>
     </div>
-  );
+    {!result.ok && <FailureExplanation result={result} />}
+    <div className="mt-4"><FlexuralBeamDiagram result={result} /></div>
+
+    <div className="mt-4 grid gap-3 lg:grid-cols-2">
+      <ResultGroup title="Required design steel">
+        <ResultRow label="Design type" value={result.sectionType === "doubly" ? "Doubly reinforced" : "Singly reinforced"} bold />
+        <ResultRow label={<>Required nominal moment, <InlineKatex math="M_{n,req}" /></>} value={`${fmt(result.requiredMn)} kN·m`} />
+        <ResultRow label={<>Minimum steel, <InlineKatex math="A_{s,min}" /></>} value={`${fmt(result.asMin, 1)} mm²`} />
+        {result.sectionType === "doubly" ? <>
+          <ResultRow label={<>Singly reinforced portion, <InlineKatex math="A_{s1}" /></>} value={`${fmt(result.asSinglyPortion, 1)} mm²`} />
+          <ResultRow label={<>Moment from Beam 1, <InlineKatex math="M_{n1}" /></>} value={`${fmt(result.mnSingly)} kN·m`} />
+          <ResultRow label={<>Remaining moment, <InlineKatex math="M_{n2}" /></>} value={`${fmt(result.mnRemaining)} kN·m`} />
+          <ResultRow label={<>Additional tension steel, <InlineKatex math="A_{s2}" /></>} value={`${fmt(result.asAdditionalTension, 1)} mm²`} />
+          <ResultRow label={<>Compression steel, <InlineKatex math="A'_s" /></>} value={`${fmt(result.asCompression, 1)} mm²`} />
+          <ResultRow label={<>Total tension steel, <InlineKatex math="A_s=A_{s1}+A_{s2}" /></>} value={`${fmt(result.asRequired, 1)} mm²`} bold />
+        </> : <ResultRow label={<>Required tension steel, <InlineKatex math="A_s" /></>} value={`${fmt(result.asRequired, 1)} mm²`} bold />}
+        <ResultRow
+          label={<>Reinforcement ratio, <InlineKatex math="\rho_{min}\,/\,\rho_{req}\,/\,\rho_{max}" /></>}
+          value={`${fmt(result.rhoMin, 5)} / ${fmt(result.rhoRequired, 5)} / ${fmt(result.rhoMax, 3)}`}
+        />
+      </ResultGroup>
+
+      <ResultGroup title="Adopted reinforcement">
+        <ResultRow label="Bottom tension bars" value={barSchedule(result.tensionBarsPerLayer, result.input.barDiameter)} bold />
+        <ResultRow label={<>Provided tension area, <InlineKatex math="A_{s,prov}" /></>} value={`${fmt(result.asProvided, 1)} mm²`} />
+        {result.compressionBarsRequired > 0 && <>
+          <ResultRow label="Top compression bars" value={barSchedule(result.compressionBarsPerLayer, result.input.compressionBarDiameter)} bold />
+          <ResultRow label={<>Provided compression area, <InlineKatex math="A'_{s,prov}" /></>} value={`${fmt(result.compressionBarsRequired * result.compressionBarArea, 1)} mm²`} />
+        </>}
+        <ResultRow label={<>Effective depth, <InlineKatex math="d" /></>} value={`${fmt(result.d)} mm`} />
+        {result.dPrime !== null && <ResultRow label={<>Compression-steel depth, <InlineKatex math="d'" /></>} value={`${fmt(result.dPrime)} mm`} />}
+        <ResultRow label="Tension bars by layer" value={result.tensionBarsPerLayer.join(" + ")} />
+        <ResultRow label="Tension spacing" value={result.spacingOk ? "PASS" : "FAIL"} bold />
+        {result.compressionBarsRequired > 0 && <ResultRow label="Compression spacing" value={result.compressionSpacingOk ? "PASS" : "FAIL"} bold />}
+        <ResultRow label="Required and provided steel" value={result.asProvided >= result.asRequired ? "PASS" : "FAIL"} bold />
+      </ResultGroup>
+    </div>
+
+    <div className="mt-4 rounded-lg border border-[var(--border)] bg-[var(--bg)] p-4">
+      <p className="text-xs font-semibold">Continue with section analysis</p>
+      <p className="mt-1 text-[11px] leading-relaxed text-[var(--text-muted)]">Use the adopted dimensions, cover, and bar layout in Beam Capacity Check to review neutral-axis depth, strain compatibility, steel stresses, and design moment capacity.</p>
+      {result.ok && result.tensionBarsPerLayer.length <= 2 && result.compressionBarsPerLayer.length <= 2 ? (
+        <Link href={beamCapacityAnalysisHref(result)} className="mt-3 inline-flex rounded-md border border-[#f5941f]/50 px-3 py-2 text-xs font-semibold text-[#f5941f] hover:bg-[#f5941f]/10">Analyze this design in Beam Capacity Check</Link>
+      ) : (
+        <p className="mt-3 text-[10px] text-[var(--text-muted)]">Complete a feasible design with no more than two rows at either face before transferring it to Beam Capacity Check.</p>
+      )}
+    </div>
+  </section>;
 }
 
-function BarSelect({
-  label,
-  value,
-  onChange,
-}: {
-  label: string;
-  value: number;
-  onChange: (value: number) => void;
-}) {
-  return (
+function ManualSolution({ steps }: { steps: SolutionStep[] }) {
+  return <section id="flexural-solution" className="mt-3 space-y-4 rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] p-4 sm:p-5">
     <div>
-      <label className="mb-1 block text-[10px] font-medium text-[var(--text-muted)]">{label}</label>
-      <select
-        value={value}
-        onChange={(event) => onChange(Number(event.target.value))}
-        className="w-full rounded-md border border-[var(--border)] bg-[var(--bg)] px-2 py-1.5 text-[12px] text-[var(--text)]"
-      >
-        {barSizes.map((size) => (
-          <option key={size} value={size}>{size} mm</option>
-        ))}
-      </select>
+      <h2 className="text-base font-extrabold">Full Manual Design Solution</h2>
+      <p className="mt-1 text-[11px] leading-relaxed text-[var(--text-muted)]">The steps below show the design in order. Each card separates the equation, numerical substitution, and answer. Values are rounded only for display.</p>
     </div>
-  );
+    {steps.map((step, index) => <article key={`${index}-${step.label}`} className="rounded-md border border-[var(--border)] bg-[var(--bg)] p-3">
+      <div className="flex items-start gap-2">
+        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#f5941f] text-[10px] font-bold text-[#1a1300]">{index + 1}</span>
+        <div className="min-w-0">
+          <h3 className="text-[11px] font-semibold text-[var(--text)]">{step.label}</h3>
+          {step.reference && <p className="mt-1 text-[9px] leading-relaxed text-[var(--text-muted)]">{step.reference}</p>}
+        </div>
+      </div>
+      <div className="mt-3 space-y-2 pl-7">
+        <SolutionPart label="Equation"><FormulaLine math={step.formula} /></SolutionPart>
+        {step.substitution && <SolutionPart label="Substitution"><FormulaLine math={step.substitution} muted /></SolutionPart>}
+        <div className={`rounded px-2 py-2 ${step.status === "fail" ? "bg-[#e05353]/15 text-[#e05353]" : "bg-[#39c98a]/15 text-[#21875c] dark:text-[#39c98a]"}`}>
+          <p className="mb-1 text-[9px] font-semibold uppercase tracking-wide">Answer</p>
+          <p className="text-[11px] leading-relaxed text-[var(--text)]">{step.result}</p>
+          {step.resultMath && <div className="mt-2 overflow-x-auto"><InlineKatex math={step.resultMath} /></div>}
+        </div>
+        {step.explanation && <p className="text-[10px] leading-relaxed text-[var(--text-muted)]">{step.explanation}</p>}
+      </div>
+    </article>)}
+  </section>;
 }
 
-function ResultRow({
-  label,
-  value,
-  bold,
-}: {
-  label: string;
-  value: string;
-  bold?: boolean;
-}) {
-  return (
-    <div className="flex items-center justify-between border-b border-[var(--border)] py-1.5 text-[11px] last:border-b-0">
-      <span className="text-[var(--text-muted)]">{label}</span>
-      <span className={bold ? "font-bold" : ""}>{value}</span>
-    </div>
-  );
+function SolutionPart({ label, children }: { label: string; children: ReactNode }) {
+  return <div><p className="mb-1 text-[9px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">{label}</p>{children}</div>;
+}
+
+function FailureExplanation({ result }: { result: FlexuralBeamResult }) {
+  const capacity = getReinforcementLayoutCapacity(result.input, "tension");
+  return <div className="mt-3 rounded-lg border border-[#e05353]/35 bg-[#e05353]/5 p-3 text-[11px] leading-relaxed">
+    <p className="font-semibold text-[#e05353]">Why the design cannot be detailed</p>
+    {result.failureDetails && <p className="mt-1 text-[var(--text-muted)]">{result.failureDetails}</p>}
+    {result.failureType === "layout" && <><p className="mt-2">The selected tension-bar size allows at most {capacity.maximumBarsPerLayer} bars per layer and {capacity.maximumTotalBars} bars within the section.</p><div className="mt-2"><FormulaLine math="n d_b+(n-1)s_{clear,min}\le b_{inside};\quad s_{clear,min}=\max\left(25,d_b,\dfrac{4d_{agg}}{3}\right)" muted /></div><p className="mt-2 text-[var(--text-muted)]">Increase the beam width or height, select another bar size, or reduce the design demand.</p></>}
+  </div>;
+}
+
+function ResultGroup({ title, children }: { title: string; children: ReactNode }) { return <section className="rounded-lg border border-[var(--border)] bg-[var(--bg)] p-3"><h3 className="mb-2 text-xs font-bold">{title}</h3>{children}</section>; }
+function ResultRow({ label, value, bold = false }: { label: ReactNode; value: string; bold?: boolean }) { return <div className="grid grid-cols-1 gap-1 border-b border-[var(--border)] py-2 text-[11px] sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:gap-4 last:border-b-0"><span className="text-[var(--text-muted)]">{label}</span><span className={`break-words sm:text-right ${bold ? "font-bold" : ""}`}>{value}</span></div>; }
+function Field({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) { const id = `flexural-${label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`; return <div><label htmlFor={id} className="mb-1 block text-[10px] font-medium text-[var(--text-muted)]">{label}</label><input id={id} type="number" inputMode="decimal" step="any" value={value} onChange={(e) => onChange(e.target.value)} className="w-full rounded-md border border-[var(--border)] bg-[var(--bg)] px-2 py-2 text-xs" /></div>; }
+function BarSelect({ label, value, onChange }: { label: string; value: number; onChange: (value: number) => void }) { return <div><label className="mb-1 block text-[10px] font-medium text-[var(--text-muted)]">{label}</label><select value={value} onChange={(e) => onChange(Number(e.target.value))} className="w-full rounded-md border border-[var(--border)] bg-[var(--bg)] px-2 py-2 text-xs">{barSizes.map((size) => <option key={size} value={size}>{size} mm</option>)}</select></div>; }
+function FormulaLine({ math, muted = false }: { math: string; muted?: boolean }) { return <div className={`max-w-full overflow-x-auto rounded-md px-3 py-2 text-xs ${muted ? "bg-[var(--bg-surface)] text-[var(--text-muted)]" : "bg-[var(--bg-surface)]"}`}><InlineKatex math={math} /></div>; }
+function barSchedule(layers: number[], diameter: number): string { const total = layers.reduce((sum, count) => sum + count, 0); return layers.length > 1 ? `${total}–${diameter} mm bars (${layers.join(" + ")} by layer)` : `${total}–${diameter} mm bars`; }
+function fmt(value: number | null | undefined, digits = 2): string { return value !== null && value !== undefined && Number.isFinite(value) ? value.toFixed(digits) : "—"; }
+
+function beamCapacityAnalysisHref(result: FlexuralBeamResult): string {
+  const params = new URLSearchParams({
+    source: "flexural-beam-design",
+    b: String(result.input.b),
+    h: String(result.input.h),
+    cover: String(result.input.cover),
+    stirrup: String(result.input.stirrupDiameter),
+    fc: String(result.input.fc),
+    fy: String(result.input.fy),
+    mu: String(result.input.Mu),
+    tensionDiameter: String(result.input.barDiameter),
+    tensionRows: result.tensionBarsPerLayer.join(","),
+    doubly: result.compressionBarsRequired > 0 ? "1" : "0",
+    compressionDiameter: String(result.input.compressionBarDiameter),
+    compressionRows: result.compressionBarsPerLayer.join(","),
+  });
+  return `/calculators/beam-capacity-check?${params.toString()}`;
 }

@@ -6,7 +6,9 @@ export function SiteFooter() {
     <footer className="border-t border-[var(--border)] py-10 sm:py-12">
       <div className="mx-auto flex w-full max-w-6xl flex-col items-center gap-5 px-4 sm:px-6 lg:px-8">
         <div className="flex items-center gap-2 text-base font-bold text-[var(--text)]">
-          <Image src="/rcalc-icon.svg" alt="RCalcs logo" width={28} height={28} className="h-7 w-7" />
+          <span className="rcalc-logo-mark h-9 w-9 shrink-0 overflow-hidden rounded-md">
+            <Image src="/rcalc-logo.png" alt="RCalcs logo" width={36} height={36} className="h-9 w-9 object-contain" />
+          </span>
           <span>
             <span className="text-[#f5941f]">RC</span>alcs
           </span>

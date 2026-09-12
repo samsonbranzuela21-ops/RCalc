@@ -102,6 +102,22 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
+.rcalc-logo-mark {
+  background: linear-gradient(
+    145deg,
+    color-mix(in srgb, var(--orange) 38%, var(--bg-surface)),
+    color-mix(in srgb, var(--orange) 18%, var(--bg-surface))
+  );
+}
+
+.dark .rcalc-logo-mark {
+  background: linear-gradient(
+    145deg,
+    color-mix(in srgb, var(--orange) 48%, var(--bg-surface)),
+    color-mix(in srgb, var(--orange) 28%, var(--bg-surface))
+  );
+}
+
 /* =========================================================
    MODULE LESSON READING SURFACE
    ========================================================= */

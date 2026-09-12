@@ -12,6 +12,9 @@ export const metadata = {
   title: "RCalcs | Reinforced Concrete Design",
   description:
     "Web-based learning platform for Reinforced Concrete Design.",
+  icons: {
+    icon: "/rcalc-logo.png",
+  },
 };
 
 export default function RootLayout({

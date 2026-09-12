@@ -1,500 +1,108 @@
-import {
-  DiagramFrame,
-  DiagramLegend,
-  DiagramSurface,
-  diagramSvgClass,
-} from "@/components/shared/DiagramFrame";
+import { DiagramFrame, DiagramLegend, DiagramSurface } from "@/components/shared/DiagramFrame";
+import { InlineKatex } from "@/components/shared/Katex";
+import type { FlexuralBeamResult, ReinforcementLayerResult } from "@/lib/flexural-beam";
 
-interface FlexuralBeamDiagramProps {
-  b: number;
-  d: number;
-  barDiameter: number;
-  barsRequired: number;
-  clearSpacing?: number | null;
-  spacingOk?: boolean | null;
-  tensionBarsPerLayer?: number[];
-  dPrime?: number | null;
-  c?: number | null;
-  a?: number | null;
-  compressionBarDiameter?: number;
-  compressionBarsRequired?: number;
-  compressionClearSpacing?: number | null;
-  compressionSpacingOk?: boolean | null;
-  compressionBarsPerLayer?: number[];
+const REBAR_BLUE = "#60bfff";
+
+export function FlexuralBeamDiagram({ result }: { result: FlexuralBeamResult }) {
+  return <DiagramFrame
+    title="Flexural reinforcement design"
+    legend={<><DiagramLegend color={REBAR_BLUE} label="Bottom tension steel" dot />{result.compressionBarsRequired > 0 && <DiagramLegend color={REBAR_BLUE} label="Top compression steel" dot />}<DiagramLegend color="var(--text-muted)" label="Stirrup envelope" dashed /></>}
+  >
+    <div className="grid min-w-[620px] gap-3 lg:grid-cols-[minmax(390px,1.1fr)_minmax(280px,.9fr)]">
+      <section className="rounded-lg border border-[var(--border)] bg-[var(--bg)] p-3">
+        <h3 className="text-xs font-bold">Beam cross-section</h3>
+        <p className="mt-1 text-[10px] text-[var(--text-muted)]">Actual bar counts, layers, cover envelope, and reinforcement centroids.</p>
+        <SectionSketch result={result} />
+      </section>
+
+      <div className="grid content-start gap-3">
+        <DesignBreakdown result={result} />
+        <BarSchedule result={result} />
+        <SpacingSummary result={result} />
+      </div>
+    </div>
+  </DiagramFrame>;
 }
 
-const WIDTH = 760;
-const HEIGHT = 450;
-const SECTION_X = 155;
-const SECTION_Y = 62;
-const SECTION_W = 190;
-const SECTION_H = 270;
-const COVER_TO_BAR = 50;
-const SIDE_COVER = 30;
+function SectionSketch({ result }: { result: FlexuralBeamResult }) {
+  const width = Math.max(result.input.b, 1);
+  const height = Math.max(result.input.h, 1);
+  const left = 145;
+  const top = 48;
+  const drawW = 210;
+  const drawH = 330;
+  const sx = drawW / width;
+  const sy = drawH / height;
+  const stirrupInsetX = (result.input.cover + result.input.stirrupDiameter / 2) * sx;
+  const stirrupInsetY = (result.input.cover + result.input.stirrupDiameter / 2) * sy;
+  const layers = [...result.tensionLayers, ...result.compressionLayers];
 
-const TENSION_COLOR = "#f5941f";
-const COMPRESSION_COLOR = "#4d7cff";
-const NEUTRAL_AXIS_COLOR = "#e05a5a";
+  return <svg viewBox="0 0 500 430" className="mt-2 block h-auto w-full" role="img" aria-label="Designed rectangular beam reinforcement cross-section">
+    <defs><marker id="design-arrow" markerWidth="7" markerHeight="7" refX="3.5" refY="3.5" orient="auto-start-reverse"><path d="M0,0 L7,3.5 L0,7 z" fill="var(--text-muted)" /></marker></defs>
+    <DiagramSurface width={500} height={430} />
+    <rect x={left} y={top} width={drawW} height={drawH} rx="2" fill="var(--bg-surface)" stroke="var(--text)" strokeWidth="2" />
+    <rect x={left + stirrupInsetX} y={top + stirrupInsetY} width={Math.max(0, drawW - 2 * stirrupInsetX)} height={Math.max(0, drawH - 2 * stirrupInsetY)} rx="2" fill="none" stroke="var(--text-muted)" strokeDasharray="5 4" />
 
-export function FlexuralBeamDiagram({
-  b,
-  d,
-  barDiameter,
-  barsRequired,
-  clearSpacing = null,
-  spacingOk = null,
-  tensionBarsPerLayer,
-  dPrime = null,
-  c = null,
-  a = null,
-  compressionBarDiameter = 0,
-  compressionBarsRequired = 0,
-  compressionClearSpacing = null,
-  compressionSpacingOk = null,
-  compressionBarsPerLayer,
-}: FlexuralBeamDiagramProps) {
-  const tensionRows = normalizeRows(tensionBarsPerLayer, barsRequired);
-  const compressionRows = normalizeRows(
-    compressionBarsPerLayer,
-    compressionBarsRequired
-  );
-  const hasCompressionSteel = compressionBarsRequired > 0 && dPrime !== null;
+    {result.ok ? layers.map((layer, layerIndex) =>
+      layer.xCentres.map((x, index) => <circle key={`${layerIndex}-${index}`} cx={left + x * sx} cy={top + layer.yFromCompressionFace * sy} r={Math.max(5, layer.barDiameter * Math.min(sx, sy) / 2)} fill={REBAR_BLUE} stroke="var(--bg)" strokeWidth="1.5" />)
+    ) : <text x="250" y="215" textAnchor="middle" fill="var(--text-muted)" fontSize="11">No feasible bar layout</text>}
 
-  const tensionRowSpacing = barDiameter + Math.max(barDiameter, 25);
-  const tensionTotalBars = sum(tensionRows);
-  const tensionBottomOffset =
-    tensionRows.length === 2
-      ? (tensionRows[1] / tensionTotalBars) * tensionRowSpacing
-      : 0;
-  const tensionUpperOffset =
-    tensionRows.length === 2
-      ? (tensionRows[0] / tensionTotalBars) * tensionRowSpacing
-      : 0;
-  const tensionDepths =
-    tensionRows.length === 2
-      ? [d + tensionBottomOffset, d - tensionUpperOffset]
-      : [d];
-
-  const compressionRowSpacing =
-    compressionBarDiameter + Math.max(compressionBarDiameter, 25);
-  const compressionTotalBars = sum(compressionRows);
-  const compressionTopOffset =
-    compressionRows.length === 2
-      ? (compressionRows[1] / compressionTotalBars) * compressionRowSpacing
-      : 0;
-  const compressionLowerOffset =
-    compressionRows.length === 2
-      ? (compressionRows[0] / compressionTotalBars) * compressionRowSpacing
-      : 0;
-  const compressionDepths =
-    hasCompressionSteel && dPrime !== null
-      ? compressionRows.length === 2
-        ? [dPrime - compressionTopOffset, dPrime + compressionLowerOffset]
-        : [dPrime]
-      : [];
-
-  const overallDepth = Math.max(d + COVER_TO_BAR + tensionBottomOffset, 1);
-  const depthToY = (depth: number) =>
-    SECTION_Y + clamp(depth, 0, overallDepth) * (SECTION_H / overallDepth);
-  const tensionBarYs = tensionDepths.map(depthToY);
-  const compressionBarYs = compressionDepths.map(depthToY);
-  const dY = depthToY(d);
-  const dPrimeY = dPrime === null ? null : depthToY(dPrime);
-  const neutralAxisY =
-    c !== null && Number.isFinite(c) ? depthToY(c) : null;
-  const compressionBlockY =
-    a !== null && Number.isFinite(a) ? depthToY(a) : null;
-
-  const barRadius = clamp((barDiameter / 2) * (SECTION_H / overallDepth), 4, 9);
-  const compressionBarRadius = clamp(
-    (compressionBarDiameter / 2) * (SECTION_H / overallDepth),
-    4,
-    9
-  );
-  const barPositions = (count: number) => {
-    const usableWidth = SECTION_W - 2 * SIDE_COVER;
-    return Array.from({ length: count }, (_, index) =>
-      count === 1
-        ? SECTION_X + SECTION_W / 2
-        : SECTION_X + SIDE_COVER + (usableWidth * index) / (count - 1)
-    );
-  };
-  const tensionBarPositions = tensionRows.map(barPositions);
-  const compressionBarPositions = compressionRows.map(barPositions);
-
-  const tensionBarCount = tensionRows[0];
-  const spacingIndex = Math.max(
-    Math.floor(tensionBarCount / 2) -
-      (tensionBarCount % 2 === 0 ? 1 : 0),
-    0
-  );
-  const spacingX1 =
-    tensionBarCount > 1
-      ? tensionBarPositions[0][spacingIndex]
-      : SECTION_X + SECTION_W / 2;
-  const spacingX2 =
-    tensionBarCount > 1
-      ? tensionBarPositions[0][spacingIndex + 1]
-      : spacingX1;
-  const spacingY = tensionBarYs[0] + barRadius + 22;
-  const showTensionSpacing = tensionBarCount > 1;
-  const tensionSpacingColor = spacingColor(spacingOk);
-  const compressionSpacingColor = spacingColor(compressionSpacingOk);
-
-  return (
-    <DiagramFrame
-      title="Flexural beam reinforcement layout"
-      legend={
-        <>
-          <DiagramLegend color={TENSION_COLOR} label="Tension steel" dot />
-          <DiagramLegend
-            color={COMPRESSION_COLOR}
-            label="Compression steel"
-            dot
-          />
-          <DiagramLegend color={NEUTRAL_AXIS_COLOR} label="Neutral axis" />
-          <DiagramLegend color="var(--text-muted)" label="Dimensions" dashed />
-        </>
-      }
-    >
-      <svg
-        viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
-        role="img"
-        aria-label="Flexural beam reinforcement cross-section and spacing diagram"
-        className={diagramSvgClass}
-      >
-        <DiagramSurface width={WIDTH} height={HEIGHT} />
-        <defs>
-          <marker
-            id="flexural-dimension-arrow"
-            markerWidth="7"
-            markerHeight="7"
-            refX="3.5"
-            refY="3.5"
-            orient="auto-start-reverse"
-          >
-            <path d="M0,3.5 L7,0 L7,7 Z" fill="var(--text-muted)" />
-          </marker>
-        </defs>
-
-        <rect
-          x={SECTION_X}
-          y={SECTION_Y}
-          width={SECTION_W}
-          height={SECTION_H}
-          rx="2"
-          fill="var(--bg-surface)"
-          stroke="var(--text)"
-          strokeWidth="2"
-        />
-
-        {compressionBlockY !== null && (
-          <rect
-            x={SECTION_X}
-            y={SECTION_Y}
-            width={SECTION_W}
-            height={Math.max(compressionBlockY - SECTION_Y, 0)}
-            fill={COMPRESSION_COLOR}
-            fillOpacity="0.1"
-          />
-        )}
-
-        {neutralAxisY !== null && (
-          <>
-            <line
-              x1={SECTION_X - 20}
-              x2={SECTION_X + SECTION_W + 25}
-              y1={neutralAxisY}
-              y2={neutralAxisY}
-              stroke={NEUTRAL_AXIS_COLOR}
-              strokeWidth="1.2"
-              strokeDasharray="6 4"
-            />
-            <text
-              x={SECTION_X + SECTION_W + 31}
-              y={neutralAxisY + 3}
-              fontSize="10"
-              fill={NEUTRAL_AXIS_COLOR}
-            >
-              N.A.
-            </text>
-          </>
-        )}
-
-        {tensionBarPositions.flatMap((positions, rowIndex) =>
-          positions.map((x, barIndex) => (
-            <circle
-              key={`tension-${rowIndex}-${barIndex}`}
-              cx={x}
-              cy={tensionBarYs[rowIndex]}
-              r={barRadius}
-              fill={TENSION_COLOR}
-              stroke="var(--bg-surface)"
-              strokeWidth="1"
-            />
-          ))
-        )}
-
-        {hasCompressionSteel &&
-          compressionBarPositions.flatMap((positions, rowIndex) =>
-            positions.map((x, barIndex) => (
-              <circle
-                key={`compression-${rowIndex}-${barIndex}`}
-                cx={x}
-                cy={compressionBarYs[rowIndex]}
-                r={compressionBarRadius}
-                fill={COMPRESSION_COLOR}
-                stroke="var(--bg-surface)"
-                strokeWidth="1"
-              />
-            ))
-          )}
-
-        <DimensionLine
-          x1={SECTION_X}
-          x2={SECTION_X + SECTION_W}
-          y1={SECTION_Y - 18}
-          y2={SECTION_Y - 18}
-          label={`b = ${formatNumber(b)} mm`}
-          labelX={SECTION_X + SECTION_W / 2}
-          labelY={SECTION_Y - 26}
-          textAnchor="middle"
-        />
-
-        <DimensionLine
-          x1={SECTION_X - 38}
-          x2={SECTION_X - 38}
-          y1={SECTION_Y}
-          y2={dY}
-          label={`d = ${formatNumber(d)} mm`}
-          labelX={SECTION_X - 48}
-          labelY={(SECTION_Y + dY) / 2}
-          textAnchor="end"
-          rotateLabel
-        />
-
-        {dPrimeY !== null && hasCompressionSteel && (
-          <DimensionLine
-            x1={SECTION_X + SECTION_W + 38}
-            x2={SECTION_X + SECTION_W + 38}
-            y1={SECTION_Y}
-            y2={dPrimeY}
-            label={`d′ = ${formatNumber(dPrime ?? 0)} mm`}
-            labelX={SECTION_X + SECTION_W + 48}
-            labelY={(SECTION_Y + dPrimeY) / 2}
-            textAnchor="start"
-            rotateLabel
-          />
-        )}
-
-        {neutralAxisY !== null && (
-          <DimensionLine
-            x1={SECTION_X + SECTION_W + 70}
-            x2={SECTION_X + SECTION_W + 70}
-            y1={SECTION_Y}
-            y2={neutralAxisY}
-            label={`c = ${formatNumber(c ?? 0)} mm`}
-            labelX={SECTION_X + SECTION_W + 80}
-            labelY={(SECTION_Y + neutralAxisY) / 2}
-            textAnchor="start"
-            rotateLabel
-          />
-        )}
-
-        {showTensionSpacing && (
-          <SpacingDimension
-            x1={spacingX1}
-            x2={spacingX2}
-            y={spacingY}
-            label={
-              clearSpacing === null
-                ? "s (schematic)"
-                : `s = ${clearSpacing.toFixed(1)} mm`
-            }
-            color={tensionSpacingColor}
-          />
-        )}
-
-        <text
-          x={SECTION_X + SECTION_W / 2}
-          y={SECTION_Y + SECTION_H + 38}
-          textAnchor="middle"
-          fontSize="11"
-          fontWeight="700"
-          fill="var(--text)"
-        >
-          {hasCompressionSteel ? "Doubly reinforced section" : "Singly reinforced section"}
-        </text>
-        <text
-          x={SECTION_X + SECTION_W / 2}
-          y={SECTION_Y + SECTION_H + 55}
-          textAnchor="middle"
-          fontSize="10"
-          fill="var(--text-muted)"
-        >
-          Tension: {tensionRows.join(" + ")} × {formatNumber(barDiameter)} mm
-        </text>
-        {hasCompressionSteel && (
-          <text
-            x={SECTION_X + SECTION_W / 2}
-            y={SECTION_Y + SECTION_H + 70}
-            textAnchor="middle"
-            fontSize="10"
-            fill="var(--text-muted)"
-          >
-            Compression: {compressionRows.join(" + ")} × {formatNumber(compressionBarDiameter)} mm
-          </text>
-        )}
-
-        <g aria-label="Flexural beam design notes">
-          <text x="500" y="92" fontSize="12" fontWeight="700" fill="var(--text)">
-            Design section
-          </text>
-          <text x="500" y="116" fontSize="10.5" fill="var(--text-muted)">
-            {hasCompressionSteel ? "Doubly reinforced" : "Singly reinforced"}
-          </text>
-          <text x="500" y="142" fontSize="10" fill="var(--text-muted)">
-            Tension layers: {tensionRows.join(" + ")}
-          </text>
-          {hasCompressionSteel && (
-            <text x="500" y="162" fontSize="10" fill="var(--text-muted)">
-              Compression layers: {compressionRows.join(" + ")}
-            </text>
-          )}
-          <text x="500" y="198" fontSize="10" fontWeight="600" fill={tensionSpacingColor}>
-            Tension spacing: {spacingStatus(clearSpacing, spacingOk)}
-          </text>
-          {hasCompressionSteel && (
-            <text x="500" y="220" fontSize="10" fontWeight="600" fill={compressionSpacingColor}>
-              Compression spacing: {spacingStatus(compressionClearSpacing, compressionSpacingOk)}
-            </text>
-          )}
-          <text x="500" y="266" fontSize="9.5" fill="var(--text-muted)">
-            Schematic section; bars are arranged
-          </text>
-          <text x="500" y="282" fontSize="9.5" fill="var(--text-muted)">
-            according to the calculated layers.
-          </text>
-        </g>
-      </svg>
-    </DiagramFrame>
-  );
+    <Dimension x1={left} y1={28} x2={left + drawW} y2={28} label={`b = ${f(result.input.b, 0)} mm`} />
+    <Dimension x1={112} y1={top} x2={112} y2={top + drawH} label={`h = ${f(result.input.h, 0)} mm`} vertical />
+    {result.ok && <>
+      <Dimension x1={388} y1={top} x2={388} y2={top + result.d * sy} label={`d = ${f(result.d, 1)} mm`} vertical />
+      {result.dPrime !== null && result.compressionBarsRequired > 0 && <Dimension x1={430} y1={top} x2={430} y2={top + result.dPrime * sy} label={`d′ = ${f(result.dPrime, 1)} mm`} vertical />}
+      <line x1={left - 8} y1={top + result.d * sy} x2={left + drawW + 8} y2={top + result.d * sy} stroke={REBAR_BLUE} strokeDasharray="4 4" />
+      <text x={left + 6} y={top + result.d * sy - 7} fill={REBAR_BLUE} fontSize="9">tension-steel centroid</text>
+      {result.dPrime !== null && result.compressionBarsRequired > 0 && <><line x1={left - 8} y1={top + result.dPrime * sy} x2={left + drawW + 8} y2={top + result.dPrime * sy} stroke={REBAR_BLUE} strokeDasharray="4 4" /><text x={left + 6} y={top + result.dPrime * sy - 7} fill={REBAR_BLUE} fontSize="9">compression-steel centroid</text></>}
+    </>}
+    <text x="250" y="410" textAnchor="middle" fill="var(--text-muted)" fontSize="9">Drawing is proportional to the entered section dimensions.</text>
+  </svg>;
 }
 
-function DimensionLine({
-  x1,
-  x2,
-  y1,
-  y2,
-  label,
-  labelX,
-  labelY,
-  textAnchor,
-  rotateLabel = false,
-}: {
-  x1: number;
-  x2: number;
-  y1: number;
-  y2: number;
-  label: string;
-  labelX: number;
-  labelY: number;
-  textAnchor: "start" | "middle" | "end";
-  rotateLabel?: boolean;
-}) {
-  return (
-    <>
-      <line
-        x1={x1}
-        x2={x2}
-        y1={y1}
-        y2={y2}
-        stroke="var(--text-muted)"
-        strokeWidth="1"
-        markerStart="url(#flexural-dimension-arrow)"
-        markerEnd="url(#flexural-dimension-arrow)"
-      />
-      <text
-        x={labelX}
-        y={labelY}
-        textAnchor={textAnchor}
-        dominantBaseline="middle"
-        fontSize="10"
-        fill="var(--text-muted)"
-        transform={
-          rotateLabel
-            ? `rotate(-90 ${labelX} ${labelY})`
-            : undefined
-        }
-      >
-        {label}
-      </text>
-    </>
-  );
+function Dimension({ x1, y1, x2, y2, label, vertical = false }: { x1: number; y1: number; x2: number; y2: number; label: string; vertical?: boolean }) {
+  return <g><line x1={x1} y1={y1} x2={x2} y2={y2} stroke="var(--text-muted)" strokeWidth="1" markerStart="url(#design-arrow)" markerEnd="url(#design-arrow)" />{vertical ? <text x={x1 - 8} y={(y1 + y2) / 2} textAnchor="middle" fill="var(--text-muted)" fontSize="9" transform={`rotate(-90 ${x1 - 8} ${(y1 + y2) / 2})`}>{label}</text> : <text x={(x1 + x2) / 2} y={y1 - 7} textAnchor="middle" fill="var(--text-muted)" fontSize="9">{label}</text>}</g>;
 }
 
-function SpacingDimension({
-  x1,
-  x2,
-  y,
-  label,
-  color,
-}: {
-  x1: number;
-  x2: number;
-  y: number;
-  label: string;
-  color: string;
-}) {
-  return (
-    <g>
-      <line x1={x1} x2={x1} y1={y - 6} y2={y} stroke="var(--text-muted)" />
-      <line x1={x2} x2={x2} y1={y - 6} y2={y} stroke="var(--text-muted)" />
-      <line x1={x1} x2={x2} y1={y} y2={y} stroke="var(--text-muted)" />
-      <line x1={x1} x2={x1} y1={y - 5} y2={y + 5} stroke="var(--text-muted)" />
-      <line x1={x2} x2={x2} y1={y - 5} y2={y + 5} stroke="var(--text-muted)" />
-      <text
-        x={(x1 + x2) / 2}
-        y={y + 16}
-        textAnchor="middle"
-        fontSize="9.5"
-        fontWeight="600"
-        fill={color}
-      >
-        {label}
-      </text>
-    </g>
-  );
+function DesignBreakdown({ result }: { result: FlexuralBeamResult }) {
+  return <section className="rounded-lg border border-[var(--border)] bg-[var(--bg)] p-3">
+    <p className="text-[10px] font-bold uppercase tracking-wide text-[var(--text-muted)]">Design steel breakdown</p>
+    {result.sectionType === "singly" ? <div className="mt-2 rounded-md border border-[#f5941f]/35 bg-[#f5941f]/10 p-3"><p className="text-xs font-bold">Singly reinforced design</p><p className="mt-1 text-[11px]">Required tension steel: <strong><InlineKatex math={`A_s=${f(result.asRequired, 1)}\\text{ mm}^2`} /></strong></p></div> : <>
+      <div className="mt-2 grid grid-cols-[1fr_auto_1fr] items-stretch gap-2">
+        <DesignPart title="Beam 1" subtitle="Singly reinforced portion" equations={[`A_{s1}=${f(result.asSinglyPortion, 1)}\\text{ mm}^2`, `M_{n1}=${f(result.mnSingly, 2)}\\text{ kN}\\cdot\\text{m}`]} />
+        <div className="flex items-center text-lg font-bold text-[var(--text-muted)]">+</div>
+        <DesignPart title="Beam 2" subtitle="Steel couple" equations={[`A_{s2}=${f(result.asAdditionalTension, 1)}\\text{ mm}^2`, `A'_s=${f(result.asCompression, 1)}\\text{ mm}^2`]} />
+      </div>
+      <div className="mt-2 rounded-md bg-[#f5941f]/10 px-3 py-2 text-[11px]"><strong>Total bottom steel: </strong><InlineKatex math={`A_s=A_{s1}+A_{s2}=${f(result.asRequired, 1)}\\text{ mm}^2`} /></div>
+    </>}
+  </section>;
 }
 
-function normalizeRows(rows: number[] | undefined, fallback: number): number[] {
-  const validRows = rows
-    ?.map((count) => Math.max(0, Math.floor(count)))
-    .filter((count) => count > 0);
-  if (validRows && validRows.length > 0) return validRows.slice(0, 2);
-  return [Math.max(1, Math.floor(Number.isFinite(fallback) ? fallback : 1))];
+function DesignPart({ title, subtitle, equations }: { title: string; subtitle: string; equations: string[] }) {
+  return <div className="rounded-md border border-[var(--border)] p-2"><p className="text-xs font-bold">{title}</p><p className="text-[9px] text-[var(--text-muted)]">{subtitle}</p>{equations.map((equation) => <div key={equation} className="mt-1 overflow-x-auto text-[10px] font-semibold"><InlineKatex math={equation} /></div>)}</div>;
 }
 
-function sum(values: number[]) {
-  return values.reduce((total, value) => total + value, 0);
+function BarSchedule({ result }: { result: FlexuralBeamResult }) {
+  return <section className="rounded-lg border border-[var(--border)] bg-[var(--bg)] p-3">
+    <p className="text-[10px] font-bold uppercase tracking-wide text-[var(--text-muted)]">Adopted bar schedule</p>
+    <ScheduleRow color={REBAR_BLUE} label="Bottom tension" layers={result.tensionLayers} diameter={result.input.barDiameter} area={result.asProvided} />
+    {result.compressionBarsRequired > 0 && <ScheduleRow color={REBAR_BLUE} label="Top compression" layers={result.compressionLayers} diameter={result.input.compressionBarDiameter} area={result.compressionBarsRequired * result.compressionBarArea} />}
+  </section>;
 }
 
-function clamp(value: number, minimum: number, maximum: number) {
-  return Math.min(Math.max(value, minimum), maximum);
+function ScheduleRow({ color, label, layers, diameter, area }: { color: string; label: string; layers: ReinforcementLayerResult[]; diameter: number; area: number }) {
+  const total = layers.reduce((sum, layer) => sum + layer.count, 0);
+  return <div className="mt-2 flex gap-2 rounded-md border border-[var(--border)] p-2"><span className="mt-1 h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: color }} /><div><p className="text-[11px] font-bold">{label}: {total}–{diameter} mm</p><p className="text-[10px] text-[var(--text-muted)]">Layers: {layers.map((layer) => layer.count).join(" + ") || "—"} · Provided area: {f(area, 1)} mm²</p></div></div>;
 }
 
-function formatNumber(value: number) {
-  return Number.isFinite(value) ? value.toFixed(0) : "—";
+function SpacingSummary({ result }: { result: FlexuralBeamResult }) {
+  return <section className="rounded-lg border border-[var(--border)] bg-[var(--bg)] p-3">
+    <div className="flex items-center justify-between gap-3"><p className="text-[10px] font-bold uppercase tracking-wide text-[var(--text-muted)]">Spacing and fit</p><span className={`rounded-full px-2 py-1 text-[9px] font-bold ${result.spacingOk && result.verticalSpacingOk ? "bg-[#39c98a]/15 text-[#21875c] dark:text-[#39c98a]" : "bg-[#e05353]/15 text-[#e05353]"}`}>{result.spacingOk && result.verticalSpacingOk ? "PASS" : "REVISE"}</span></div>
+    <div className="mt-2 grid grid-cols-2 gap-2"><Metric label="Width inside stirrups" value={`${f(result.insideWidth, 1)} mm`} /><Metric label="Minimum clear gap" value={`${f(result.minClearSpacingRequired, 2)} mm`} /></div>
+    {result.tensionLayers.map((layer) => <p key={layer.index} className="mt-2 text-[10px] text-[var(--text-muted)]">Bottom layer {layer.index}: {layer.count} bar{layer.count === 1 ? "" : "s"}; {layer.clearSpacing === null ? "no horizontal interbar gap" : `clear gap = ${f(layer.clearSpacing, 2)} mm`}{layer.verticalClearSpacingToNext !== null ? `; vertical clear gap = ${f(layer.verticalClearSpacingToNext, 1)} mm` : ""}.</p>)}
+  </section>;
 }
 
-function spacingColor(ok: boolean | null | undefined) {
-  return ok === false ? "#e05353" : ok === true ? "#39c98a" : "var(--text-muted)";
-}
-
-function spacingStatus(
-  spacing: number | null | undefined,
-  ok: boolean | null | undefined
-) {
-  if (spacing === null || spacing === undefined) return "not applicable";
-  return `${spacing.toFixed(1)} mm — ${ok === false ? "NOT OK" : ok === true ? "OK" : "check"}`;
-}
+function Metric({ label, value }: { label: string; value: string }) { return <div className="rounded-md bg-[var(--bg-surface)] p-2"><p className="text-[9px] text-[var(--text-muted)]">{label}</p><p className="mt-0.5 text-[11px] font-bold">{value}</p></div>; }
+function f(value: number | null | undefined, digits = 2) { return value !== null && value !== undefined && Number.isFinite(value) ? value.toFixed(digits) : "—"; }
