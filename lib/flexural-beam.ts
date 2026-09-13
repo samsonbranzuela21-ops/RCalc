@@ -24,6 +24,8 @@ export interface FlexuralBeamInput {
   cover?: number;
   stirrupDiameter?: number;
   aggregateSize?: number;
+  /** Optional target tension strain used to establish the design neutral axis. */
+  targetTensionStrain?: number | null;
   /** Legacy effective depth to the compression steel centroid. Used only when h is omitted. */
   dPrime?: number;
 }
@@ -88,6 +90,7 @@ export interface FlexuralBeamResult {
     cover: number;
     stirrupDiameter: number;
     aggregateSize: number;
+    targetTensionStrain: number | null;
     legacyEffectiveDepth: boolean;
   };
   b: number;
@@ -192,6 +195,7 @@ interface NormalizedInput {
   cover: number;
   stirrupDiameter: number;
   aggregateSize: number;
+  targetTensionStrain: number | null;
   legacyEffectiveDepth: boolean;
   legacyEffectiveDepthValue: number | null;
   legacyDPrime: number | null;
@@ -301,6 +305,7 @@ function normalizeInput(input: FlexuralBeamInput): NormalizedInput {
     cover,
     stirrupDiameter,
     aggregateSize: input.aggregateSize ?? 19,
+    targetTensionStrain: input.targetTensionStrain ?? null,
     legacyEffectiveDepth,
     legacyEffectiveDepthValue: legacyEffectiveDepth ? input.d ?? null : null,
     legacyDPrime: legacyEffectiveDepth ? input.dPrime ?? null : null,
@@ -325,8 +330,14 @@ export function validateFlexuralBeamInput(input: FlexuralBeamInput): string | nu
 
   const nonFinite = numeric.find(([, value]) => !Number.isFinite(value));
   if (nonFinite) return `Enter a finite numeric value for ${nonFinite[0]}.`;
+  if (normalized.targetTensionStrain !== null && !Number.isFinite(normalized.targetTensionStrain)) {
+    return "Enter a finite numeric value for target tension strain.";
+  }
   const nonPositive = numeric.find(([, value]) => value <= 0);
   if (nonPositive) return `${nonPositive[0]} must be greater than zero.`;
+  if (normalized.targetTensionStrain !== null && normalized.targetTensionStrain < EPSILON_BEAM_MIN) {
+    return `Target tension strain must be at least ${EPSILON_BEAM_MIN.toFixed(3)}.`;
+  }
   if (normalized.fc > 100) return "This calculator supports concrete strengths up to 100 MPa.";
   if (normalized.fy > 550) return "This calculator supports reinforcement yield strengths up to 550 MPa.";
   if (normalized.Es < 150_000 || normalized.Es > 250_000 || normalized.Es <= normalized.fy) {
@@ -831,8 +842,8 @@ function requiredSteel(
   input: NormalizedInput,
   beta1: number,
   d: number,
+  phiAssumed = PHI_TENSION,
 ): { Rn: number; rho: number; area: number; discriminant: number; m: number; requiredMn: number } {
-  const phiAssumed = PHI_TENSION;
   const requiredMnNmm = input.Mu * 1e6 / phiAssumed;
   const Rn = requiredMnNmm / (input.b * d * d);
   const m = input.fy / (0.85 * input.fc);
@@ -843,6 +854,24 @@ function requiredSteel(
   const area = Number.isFinite(rho) ? rho * input.b * d : Number.NaN;
   void beta1;
   return { Rn, rho, area, discriminant, m, requiredMn: requiredMnNmm / 1e6 };
+}
+
+function steelFromTargetTensionStrain(
+  input: NormalizedInput,
+  beta1: number,
+  d: number,
+  targetTensionStrain: number,
+): { c: number; a: number; rho: number; area: number; Mn: number } {
+  const c = (EPSILON_CU * d) / (EPSILON_CU + targetTensionStrain);
+  const a = beta1 * c;
+  const area = (0.85 * input.fc * input.b * a) / input.fy;
+  return {
+    c,
+    a,
+    rho: area / (input.b * d),
+    area,
+    Mn: (area * input.fy * (d - a / 2)) / 1e6,
+  };
 }
 
 function rhoMinimum(input: NormalizedInput): number {
@@ -878,6 +907,7 @@ function makeBaseResult(
       cover: input.cover,
       stirrupDiameter: input.stirrupDiameter,
       aggregateSize: input.aggregateSize,
+      targetTensionStrain: input.targetTensionStrain,
       legacyEffectiveDepth: input.legacyEffectiveDepth,
     },
     b: input.b,
@@ -886,7 +916,9 @@ function makeBaseResult(
     dExtremeTension: initialD,
     dPrime: null,
     beta1,
-    phiAssumed: PHI_TENSION,
+    phiAssumed: input.targetTensionStrain === null
+      ? PHI_TENSION
+      : phiFromTensionStrain(input.targetTensionStrain, input.fy / input.Es),
     phi: null,
     epsilonY: input.fy / input.Es,
     epsilonT: null,
@@ -1000,7 +1032,16 @@ export function designSinglyReinforcedBeam(input: FlexuralBeamInput): FlexuralBe
       throw new Error("Legacy d′ must lie inside the section, measured from the compression face.");
     }
   }
-  const trial = requiredSteel(normalized, beta1, initialD);
+  const phiAssumed = normalized.targetTensionStrain === null
+    ? PHI_TENSION
+    : phiFromTensionStrain(normalized.targetTensionStrain, normalized.fy / normalized.Es);
+  const demandTrial = requiredSteel(normalized, beta1, initialD, phiAssumed);
+  const strainTrial = normalized.targetTensionStrain === null
+    ? null
+    : steelFromTargetTensionStrain(normalized, beta1, initialD, normalized.targetTensionStrain);
+  const trial = strainTrial
+    ? { ...demandTrial, area: strainTrial.area, rho: strainTrial.rho }
+    : demandTrial;
   const base = makeBaseResult(normalized, beta1, rhoMin, initialD, trial, "No valid reinforcement arrangement has been selected.");
   const minSteelArea = rhoMin * normalized.b * initialD;
   const trialArea = Number.isFinite(trial.area) ? Math.max(trial.area, minSteelArea) : minSteelArea;
@@ -1038,10 +1079,17 @@ export function designSinglyReinforcedBeam(input: FlexuralBeamInput): FlexuralBe
           reason: layout.reason,
         });
         if (offset === 0) singlyLimitReason = layout.reason;
+        if (normalized.targetTensionStrain !== null) break;
         if (layout.reason.includes("more reinforcement layers than fit")) break;
         continue;
       }
-      const requiredData = requiredSteel(normalized, beta1, layout.d);
+      const demandData = requiredSteel(normalized, beta1, layout.d, phiAssumed);
+      const strainData = normalized.targetTensionStrain === null
+        ? null
+        : steelFromTargetTensionStrain(normalized, beta1, layout.d, normalized.targetTensionStrain);
+      const requiredData = strainData
+        ? { ...demandData, area: strainData.area, rho: strainData.rho }
+        : demandData;
       const asRequired = Math.max(Number.isFinite(requiredData.area) ? requiredData.area : 0, rhoMin * normalized.b * layout.d);
       const rhoRequired = asRequired / (normalized.b * layout.d);
       const rhoProvided = layout.area / (normalized.b * layout.d);
@@ -1064,12 +1112,17 @@ export function designSinglyReinforcedBeam(input: FlexuralBeamInput): FlexuralBe
       }
       const analysis = analyzeSection(normalized, beta1, layout, null);
       const strengthOk = analysis.valid && analysis.phiMn !== null && analysis.phiMn + 1e-8 >= normalized.Mu;
+      const targetStrainStrengthOk = strainData === null ||
+        strainData.Mn * phiAssumed + 1e-8 >= normalized.Mu;
       const minimumOk = layout.area + 1e-8 >= rhoMin * normalized.b * layout.d;
-      const adequacy = layout.valid && minimumOk && analysis.valid && analysis.strainOk && analysis.equilibriumOk && strengthOk;
+      const adequacy = layout.valid && minimumOk && analysis.valid && analysis.strainOk && analysis.equilibriumOk && strengthOk && targetStrainStrengthOk;
       const failedChecks = [
         !analysis.valid ? analysis.reason : null,
         !analysis.strainOk ? `Extreme tension strain εt=${analysis.epsilonT?.toFixed(6) ?? "not available"} does not meet εt,min=${EPSILON_BEAM_MIN.toFixed(3)}.` : null,
         !analysis.equilibriumOk ? "Force equilibrium did not converge within tolerance." : null,
+        !targetStrainStrengthOk && strainData !== null
+          ? `The target-strain singly reinforced block provides phi Mn=${(strainData.Mn * phiAssumed).toFixed(2)} kN m, below Mu=${normalized.Mu.toFixed(2)} kN m.`
+          : null,
         !strengthOk && analysis.phiMn !== null ? `φMn=${analysis.phiMn.toFixed(2)} kN·m is below Mu=${normalized.Mu.toFixed(2)} kN·m.` : null,
         !minimumOk ? "Provided tension steel is below As,min." : null,
       ].filter((reason): reason is string => reason !== null);
@@ -1097,6 +1150,7 @@ export function designSinglyReinforcedBeam(input: FlexuralBeamInput): FlexuralBe
         };
         break;
       }
+      if (normalized.targetTensionStrain !== null) break;
       if (!analysis.valid && iterationRows[iterationRows.length - 1].reason.includes("No force-equilibrium root")) {
         singlyLimitReason = "The singly reinforced section has no valid force-equilibrium solution with the selected section and bar arrangement.";
       }
@@ -1193,13 +1247,20 @@ function designDoublyReinforced(
   previousRows: FlexuralBeamResult["iterationRows"],
   previousIterations: number,
 ): FlexuralBeamResult {
-  const initialD = input.legacyEffectiveDepth
+  const geometricInitialD = input.legacyEffectiveDepth
     ? Number(input.legacyEffectiveDepthValue)
     : input.h - input.cover - input.stirrupDiameter - input.barDiameter / 2;
+  const targetTensionLayout = input.targetTensionStrain === null
+    ? null
+    : buildGroupLayout(input, firstTensionCount, "tension");
+  const initialD = targetTensionLayout?.valid && targetTensionLayout.d !== null
+    ? targetTensionLayout.d
+    : geometricInitialD;
   const dPrimeTrial = input.legacyEffectiveDepth && input.legacyDPrime !== null
     ? input.legacyDPrime
     : input.cover + input.stirrupDiameter + input.compressionBarDiameter / 2;
-  const epsilonTDesign = EPSILON_TENSION_CONTROLLED;
+  const epsilonTDesign = input.targetTensionStrain ?? EPSILON_TENSION_CONTROLLED;
+  const phiDesign = phiFromTensionStrain(epsilonTDesign, input.fy / input.Es);
   const cDesign = (EPSILON_CU * initialD) / (EPSILON_CU + epsilonTDesign);
   const aDesign = beta1 * cDesign;
   let as1 = (0.85 * input.fc * input.b * aDesign) / input.fy;
@@ -1209,7 +1270,7 @@ function designDoublyReinforced(
     designRatioCapApplied = true;
   }
   const mn1 = as1 * input.fy * (initialD - aDesign / 2) / 1e6;
-  const mnRequired = input.Mu / PHI_TENSION;
+  const mnRequired = input.Mu / phiDesign;
   const mn2 = mnRequired - mn1;
   const epsilonSPrimeDesign = EPSILON_CU * (cDesign - dPrimeTrial) / cDesign;
   const fsPrimeDesign = clamp(epsilonSPrimeDesign * input.Es, -input.fy, input.fy);
@@ -1380,7 +1441,7 @@ function designDoublyReinforced(
         asSinglyPortion: as1,
         mnSingly: mn1,
         mnRemaining: mn2,
-        muRemaining: input.Mu - PHI_TENSION * mn1,
+        muRemaining: input.Mu - phiDesign * mn1,
         asAdditionalTension: as2,
         asCompression,
         epsilonSPrime: epsilonSPrimeDesign,
@@ -1409,7 +1470,7 @@ function designDoublyReinforced(
     a: selected.analysis.a,
     c: selected.analysis.c,
     Rn: trial.Rn,
-    requiredMn: input.Mu / PHI_TENSION,
+    requiredMn: input.Mu / phiDesign,
     rhoRequired: selected.rhoRequired,
     rhoProvided: selected.rhoProvided,
     rhoMin,
@@ -1460,7 +1521,7 @@ function designDoublyReinforced(
     asSinglyPortion: as1,
     mnSingly: mn1,
     mnRemaining: mn2,
-    muRemaining: input.Mu - PHI_TENSION * mn1,
+    muRemaining: input.Mu - phiDesign * mn1,
     asAdditionalTension: as2,
     asCompression,
     epsilonSPrime: selected.analysis.epsilonSPrime,
@@ -1586,7 +1647,10 @@ export function getDesignSolutionSteps(
   const designDPrime = normalized.legacyEffectiveDepth && normalized.legacyDPrime !== null
     ? normalized.legacyDPrime
     : normalized.cover + normalized.stirrupDiameter + normalized.compressionBarDiameter / 2;
-  const trial = requiredSteel(normalized, result.beta1, trialD);
+  const trial = requiredSteel(normalized, result.beta1, trialD, result.phiAssumed);
+  const targetStrainTrial = normalized.targetTensionStrain === null
+    ? null
+    : steelFromTargetTensionStrain(normalized, result.beta1, trialD, normalized.targetTensionStrain);
   const tensionAreaPerBar = steelArea(normalized.barDiameter);
   const compressionAreaPerBar = steelArea(normalized.compressionBarDiameter);
   const referenceStrength = "NSCP 2015 Sections 421.2.2 and 422.2.2 / ACI 318-14 Sections 21.2.2 and 22.2.2.";
@@ -1620,10 +1684,24 @@ export function getDesignSolutionSteps(
       : "Cc is the clear cover from the concrete face to the outside of the stirrup.",
   });
 
+  if (targetStrainTrial) {
+    steps.push({
+      label: "Target tension strain and neutral-axis depth",
+      formula: "c=\dfrac{0.003}{0.003+\varepsilon_t}d;\quad a=\beta_1c;\quad A_{s,design}=\dfrac{0.85f'_cba}{f_y}",
+      substitution: `\varepsilon_t=${n(normalized.targetTensionStrain, 6)};\quad c=\dfrac{0.003}{0.003+${n(normalized.targetTensionStrain, 6)}}(${n(trialD, 2)})=${n(targetStrainTrial.c, 2)}\text{ mm};\quad a=(${n(result.beta1, 3)})(${n(targetStrainTrial.c, 2)})=${n(targetStrainTrial.a, 2)}\text{ mm};\quad A_{s,design}=${n(targetStrainTrial.area, 2)}\text{ mm}^2`,
+      result: "The supplied tension strain establishes the trial neutral-axis depth and the corresponding singly reinforced concrete-block steel area.",
+      reference: referenceStrength,
+    });
+  }
+
   steps.push({
     label: "Required nominal moment and singly reinforced trial",
-    formula: "M_{n,req}=\dfrac{M_u}{\phi};\qquad R_n=\dfrac{M_{n,req}}{b d^2};\qquad \rho=\dfrac{1-\sqrt{1-2mR_n/f_y}}{m};\quad m=\dfrac{f_y}{0.85f'_c}",
-    substitution: `\phi=0.90;\quad M_{n,req}=\dfrac{${n(normalized.Mu, 2)}}{0.90}=${n(result.requiredMn, 2)}\text{ kN m};\quad R_n=${n(trial.Rn, 4)}\text{ MPa};\quad \rho=${n(trial.rho, 6)}`,
+    formula: targetStrainTrial
+      ? "M_{n,req}=\dfrac{M_u}{\phi_{assumed}};\quad \rho_{design}=\dfrac{A_{s,design}}{bd}"
+      : "M_{n,req}=\dfrac{M_u}{\phi};\qquad R_n=\dfrac{M_{n,req}}{b d^2};\qquad \rho=\dfrac{1-\sqrt{1-2mR_n/f_y}}{m};\quad m=\dfrac{f_y}{0.85f'_c}",
+    substitution: targetStrainTrial
+      ? `\phi_{assumed}=${n(result.phiAssumed, 3)};\quad M_{n,req}=\dfrac{${n(normalized.Mu, 2)}}{${n(result.phiAssumed, 3)}}=${n(result.requiredMn, 2)}\text{ kN m};\quad \rho_{design}=${n(targetStrainTrial.rho, 6)}`
+      : `\phi=0.90;\quad M_{n,req}=\dfrac{${n(normalized.Mu, 2)}}{0.90}=${n(result.requiredMn, 2)}\text{ kN m};\quad R_n=${n(trial.Rn, 4)}\text{ MPa};\quad \rho=${n(trial.rho, 6)}`,
     result: result.sectionType === "singly"
       ? "The singly reinforced trial supplies the required design steel."
       : "The singly reinforced portion is insufficient, so the remaining moment is assigned to a tension-compression steel couple.",
@@ -1640,13 +1718,14 @@ export function getDesignSolutionSteps(
   });
 
   if (result.sectionType === "doubly") {
-    const cDesign = 0.003 * trialD / (0.003 + 0.005);
+    const epsilonTDesign = normalized.targetTensionStrain ?? EPSILON_TENSION_CONTROLLED;
+    const cDesign = (EPSILON_CU * trialD) / (EPSILON_CU + epsilonTDesign);
     const aDesign = result.beta1 * cDesign;
     steps.push({
       label: "Beam 1: singly reinforced portion",
       formula: "c=\dfrac{0.003}{0.003+\varepsilon_t}d;\quad a=\beta_1c;\quad A_{s1}=\dfrac{0.85f'_cba}{f_y};\quad M_{n1}=A_{s1}f_y\left(d-\dfrac{a}{2}\right)",
-      substitution: `\varepsilon_t=0.005;\quad c=${n(cDesign, 2)}\text{ mm};\quad a=${n(aDesign, 2)}\text{ mm};\quad A_{s1}=${n(result.asSinglyPortion, 2)}\text{ mm}^2`,
-      result: "Beam 1 is the tension-controlled singly reinforced contribution used in the design superposition.",
+      substitution: `\varepsilon_t=${n(epsilonTDesign, 6)};\quad c=${n(cDesign, 2)}\text{ mm};\quad a=${n(aDesign, 2)}\text{ mm};\quad A_{s1}=${n(result.asSinglyPortion, 2)}\text{ mm}^2`,
+      result: "Beam 1 is the singly reinforced contribution used in the design superposition at the selected target strain.",
       resultMath: `M_{n1}=${n(result.mnSingly, 2)}\text{ kN m}`,
       reference: referenceStrength,
     });
@@ -1728,7 +1807,10 @@ export function getSolutionSteps(
   const trialD = normalized.legacyEffectiveDepth
     ? Number(input.d)
     : normalized.h - coverStirrupOffset - normalized.barDiameter / 2;
-  const initialTrial = requiredSteel(normalized, result.beta1, trialD);
+  const initialTrial = requiredSteel(normalized, result.beta1, trialD, result.phiAssumed);
+  const targetStrainTrial = normalized.targetTensionStrain === null
+    ? null
+    : steelFromTargetTensionStrain(normalized, result.beta1, trialD, normalized.targetTensionStrain);
   const Ab = steelArea(normalized.barDiameter);
 
   add({
@@ -1753,6 +1835,16 @@ export function getSolutionSteps(
     explanation: "For multiple layers, the final d is measured to the area-weighted centroid of all tension bars, not just the outermost layer.",
     status: result.d > 0 ? "pass" : "fail",
   });
+
+  if (targetStrainTrial) {
+    add({
+      label: "Target tension strain and neutral-axis depth",
+      formula: "c=\\dfrac{0.003}{0.003+\\varepsilon_t}d;\\quad a=\\beta_1c;\\quad A_{s,design}=\\dfrac{0.85f'_cba}{f_y}",
+      substitution: `\\varepsilon_t=${n(normalized.targetTensionStrain, 6)};\\quad c=\\dfrac{0.003}{0.003+${n(normalized.targetTensionStrain, 6)}}(${n(trialD, 2)})=${n(targetStrainTrial.c, 2)}\\text{ mm};\\quad a=(${n(result.beta1, 3)})(${n(targetStrainTrial.c, 2)})=${n(targetStrainTrial.a, 2)}\\text{ mm};\\quad A_{s,design}=${n(targetStrainTrial.area, 2)}\\text{ mm}^2`,
+      result: "The supplied tension strain sets the initial neutral-axis depth and strain-based steel estimate. The adopted section is then checked using its actual force equilibrium.",
+      reference: "NSCP 2015 Sections 421.2.2 and 422.2.1-422.2.2 / ACI 318-14 Sections 21.2.2 and 22.2.1-22.2.2.",
+    });
+  }
 
   add({
     label: "Compression-steel depth from cover",
@@ -1781,12 +1873,16 @@ export function getSolutionSteps(
 
   add({
     label: "Trial tensile strain and assumed strength-reduction factor",
-    formula: "\\varepsilon_{t,trial}=0.005\\quad\\Longrightarrow\\quad\\phi_{trial}=0.90",
-    substitution: `\\phi_{trial}=0.90,\\quad M_{n,req}=\\dfrac{M_u}{\\phi_{trial}}=\\dfrac{${n(normalized.Mu, 2)}}{0.90}`,
+    formula: normalized.targetTensionStrain === null
+      ? "\\varepsilon_{t,trial}=0.005\\quad\\Longrightarrow\\quad\\phi_{trial}=0.90"
+      : "\\varepsilon_{t,trial}=\\varepsilon_{t,input}\\quad\\Longrightarrow\\quad\\phi_{trial}=\\phi(\\varepsilon_{t,trial})",
+    substitution: `\\varepsilon_{t,trial}=${n(normalized.targetTensionStrain ?? EPSILON_TENSION_CONTROLLED, 6)};\\quad\\phi_{trial}=${n(result.phiAssumed, 3)};\\quad M_{n,req}=\\dfrac{${n(normalized.Mu, 2)}}{${n(result.phiAssumed, 3)}}`,
     result: "The final tensile strain and strength-reduction factor are recalculated from the adopted reinforcement.",
     resultMath: `M_{n,req}=${n(result.requiredMn, 3)}\\text{kN·m};\\quad \\varepsilon_t=${n(result.epsilonT, 6)};\\quad \\phi=${n(result.phi, 3)}`,
     reference: "NSCP 2015 Table 421.2.2 / ACI 318-14 Table 21.2.2.",
-    explanation: "The 0.90 value is only the initial tension-controlled design assumption. The displayed final φ is recalculated from the final provided bars and extreme tension-layer strain.",
+    explanation: normalized.targetTensionStrain === null
+      ? "The 0.90 value is only the initial tension-controlled design assumption. Final phi is recalculated from the provided reinforcement strain."
+      : "The supplied strain sets the initial design assumption. Final phi is recalculated from the provided reinforcement strain.",
   });
 
   add({
@@ -1801,7 +1897,7 @@ export function getSolutionSteps(
   add({
     label: "Factored-moment conversion and required nominal moment",
     formula: "M_u(\\text{N·mm})=M_u(\\text{kN·m})10^6;\\quad M_{n,req}=M_u/\\phi_{trial}",
-    substitution: `M_u=${n(normalized.Mu, 2)}\\times10^6=${n(normalized.Mu * 1e6, 0)}\\text{ N·mm};\\quad M_{n,req}=${n(normalized.Mu * 1e6, 0)}/0.90`,
+    substitution: `M_u=${n(normalized.Mu, 2)}\\times10^6=${n(normalized.Mu * 1e6, 0)}\\text{ N·mm};\\quad M_{n,req}=${n(normalized.Mu * 1e6, 0)}/${n(result.phiAssumed, 3)}`,
     result: "The required nominal moment is shown in both kN·m and N·mm.",
     resultMath: `M_{n,req}=${n(result.requiredMn, 3)}\\text{kN·m}=${n(result.requiredMn * 1e6, 0)}\\text{N·mm}`,
     reference: "NSCP 2015 Section 203.3 / ACI 318-14 Chapter 5 (factored load effects).",
@@ -1818,17 +1914,25 @@ export function getSolutionSteps(
 
   const m = normalized.fy / (0.85 * normalized.fc);
   add({
-    label: "Singly reinforced quadratic for the trial rho",
-    formula: "m=\\dfrac{f_y}{0.85f'_c};\\quad R_n=\\rho f_y\\left(1-\\dfrac{m\\rho}{2}\\right);\\quad \\rho=\\dfrac{1-\\sqrt{1-2mR_n/f_y}}{m}",
-    substitution: `m=${n(normalized.fy, 1)}/[0.85(${n(normalized.fc, 1)})]=${n(m, 5)};\\quad \\Delta=1-2(${n(m, 5)})(${n(initialTrial.Rn, 4)})/${n(normalized.fy, 1)}=${n(initialTrial.discriminant, 6)};\\quad \\rho=[1-\\sqrt{${n(initialTrial.discriminant, 6)}}]/${n(m, 5)}`,
-    result: Number.isFinite(initialTrial.rho)
-      ? "The physical smaller root is used for the singly reinforced trial."
-      : "The discriminant is negative, so no real singly reinforced root exists; use the doubly reinforced branch.",
-    resultMath: Number.isFinite(initialTrial.rho)
-      ? `\\rho_{trial}=${n(initialTrial.rho, 6)}\\quad(\\text{dimensionless})`
-      : `\\Delta=${n(initialTrial.discriminant, 6)}<0`,
+    label: targetStrainTrial ? "Target-strain steel estimate" : "Singly reinforced quadratic for the trial rho",
+    formula: targetStrainTrial
+      ? "A_{s,design}=\\dfrac{0.85f'_c b\\beta_1c}{f_y};\\quad \\rho_{design}=\\dfrac{A_{s,design}}{bd}"
+      : "m=\\dfrac{f_y}{0.85f'_c};\\quad R_n=\\rho f_y\\left(1-\\dfrac{m\\rho}{2}\\right);\\quad \\rho=\\dfrac{1-\\sqrt{1-2mR_n/f_y}}{m}",
+    substitution: targetStrainTrial
+      ? `A_{s,design}=${n(targetStrainTrial.area, 2)}\\text{ mm}^2;\\quad \\rho_{design}=${n(targetStrainTrial.rho, 6)}`
+      : `m=${n(normalized.fy, 1)}/[0.85(${n(normalized.fc, 1)})]=${n(m, 5)};\\quad \\Delta=1-2(${n(m, 5)})(${n(initialTrial.Rn, 4)})/${n(normalized.fy, 1)}=${n(initialTrial.discriminant, 6)};\\quad \\rho=[1-\\sqrt{${n(initialTrial.discriminant, 6)}}]/${n(m, 5)}`,
+    result: targetStrainTrial
+      ? "The strain-based steel estimate is used for the initial bar trial; the adopted bars still undergo final equilibrium and strength checks."
+      : Number.isFinite(initialTrial.rho)
+        ? "The physical smaller root is used for the singly reinforced trial."
+        : "The discriminant is negative, so no real singly reinforced root exists; use the doubly reinforced branch.",
+    resultMath: targetStrainTrial
+      ? `A_{s,design}=${n(targetStrainTrial.area, 2)}\\text{ mm}^2;\\quad \\rho_{design}=${n(targetStrainTrial.rho, 6)}`
+      : Number.isFinite(initialTrial.rho)
+        ? `\\rho_{trial}=${n(initialTrial.rho, 6)}\\quad(\\text{dimensionless})`
+        : `\\Delta=${n(initialTrial.discriminant, 6)}<0`,
     reference: "NSCP 2015 Section 422.2.2 / ACI 318-14 Section 22.2.2.",
-    status: Number.isFinite(initialTrial.rho) ? "pass" : "fail",
+    status: targetStrainTrial || Number.isFinite(initialTrial.rho) ? "pass" : "fail",
   });
 
   add({
@@ -1898,6 +2002,9 @@ export function getSolutionSteps(
   });
 
   if (result.sectionType === "doubly") {
+    const epsilonTDesign = normalized.targetTensionStrain ?? EPSILON_TENSION_CONTROLLED;
+    const cDesign = (EPSILON_CU * trialD) / (EPSILON_CU + epsilonTDesign);
+    const aDesign = result.beta1 * cDesign;
     add({
       label: "Why the design switches to a doubly reinforced section",
       formula: "\\phi M_{n,single}<M_u\\;\\text{or an applicable required/provided design check fails}",
@@ -1914,7 +2021,7 @@ export function getSolutionSteps(
     add({
       label: "Doubly reinforced superposition trial",
       formula: "c=\\dfrac{0.003}{0.003+\\varepsilon_{t,design}}d_{extreme};\\quad a=\\beta_1c;\\quad A_{s1}=\\dfrac{0.85f'_cba}{f_y}",
-      substitution: `\\varepsilon_{t,design}=0.005;\\quad c_{design}=0.003/(0.003+0.005)(${n(result.dExtremeTension, 2)})=${n(0.003 * result.dExtremeTension / 0.008, 2)}\\text{ mm};\\quad a_{design}=(${n(result.beta1, 3)})(${n(0.003 * result.dExtremeTension / 0.008, 2)})=${n(result.beta1 * 0.003 * result.dExtremeTension / 0.008, 2)}\\text{ mm};\\quad A_{s1}=${n(result.asSinglyPortion, 2)}\\text{ mm}^2`,
+      substitution: `\\varepsilon_{t,design}=${n(epsilonTDesign, 6)};\\quad c_{design}=0.003/(0.003+${n(epsilonTDesign, 6)})(${n(trialD, 2)})=${n(cDesign, 2)}\\text{ mm};\\quad a_{design}=(${n(result.beta1, 3)})(${n(cDesign, 2)})=${n(aDesign, 2)}\\text{ mm};\\quad A_{s1}=${n(result.asSinglyPortion, 2)}\\text{ mm}^2`,
       result: result.warnings.some((warning) => warning.includes("capped"))
         ? "The ρmax cap controls the singly reinforced contribution; this is not the final provided-section capacity."
         : "This is the theoretical singly reinforced contribution, not the final provided-section capacity.",

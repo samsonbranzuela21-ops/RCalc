@@ -183,6 +183,50 @@ test('Problem 27 checks bar counts and rechecks phi from final strain', () => {
   assert.ok(result.spacingOk && result.compressionSpacingOk && result.geometryOk);
 });
 
+test('an optional target tension strain derives c and changes the strain-based design trial', () => {
+  const input = problem(500, {
+    b: 350, fc: 21, barDiameter: 32, compressionBarDiameter: 20,
+    targetTensionStrain: 0.006,
+  });
+  const defaultResult = designSinglyReinforcedBeam({ ...input, targetTensionStrain: undefined });
+  const result = designSinglyReinforcedBeam(input);
+  const trialD = input.h - input.cover - input.stirrupDiameter - input.barDiameter / 2;
+  const expectedC = 0.003 * trialD / (0.003 + input.targetTensionStrain);
+  const designSteps = getDesignSolutionSteps(input, result);
+  const strainStep = designSteps.find(step => step.label === 'Target tension strain and neutral-axis depth');
+  const superpositionStep = designSteps.find(step => step.label === 'Beam 1: singly reinforced portion');
+  const fullSteps = getSolutionSteps(input, result);
+
+  assert.equal(result.ok, true);
+  assert.equal(result.input.targetTensionStrain, 0.006);
+  assert.equal(result.sectionType, 'doubly');
+  close(result.phiAssumed, 0.9);
+  assert.ok(strainStep.substitution.includes(expectedC.toFixed(2)));
+  assert.ok(superpositionStep.substitution.includes('\\varepsilon_t=0.006000'));
+  assert.notDeepEqual(result.compressionBarsPerLayer, defaultResult.compressionBarsPerLayer);
+  for (const step of [...designSteps, ...fullSteps]) {
+    for (const math of [step.formula, step.substitution, step.resultMath].filter(Boolean)) {
+      assert.doesNotThrow(() => katex.renderToString(math, { throwOnError: true }), step.label);
+    }
+  }
+});
+
+test('a target-strain trial that cannot carry Mu switches to doubly reinforced even if rounded tension bars appear sufficient', () => {
+  const input = problem(450, {
+    b: 300, h: 600, barDiameter: 25, compressionBarDiameter: 25,
+    targetTensionStrain: 0.006,
+  });
+  const result = designSinglyReinforcedBeam(input);
+  const singlyTrial = result.iterationRows[0];
+
+  assert.ok(singlyTrial.phiMn > input.Mu, 'rounded tension bars alone appear to carry Mu');
+  assert.match(singlyTrial.reason, /target-strain singly reinforced block provides phi Mn=.*below Mu/);
+  assert.equal(result.ok, true);
+  assert.equal(result.sectionType, 'doubly');
+  assert.ok(result.compressionBarsRequired > 0);
+  assert.ok(result.phiMn >= input.Mu);
+});
+
 test('rho max is fixed at the cited code limit and stays distinct from phi', () => {
   const input = problem(350);
   const result = designSinglyReinforcedBeam(input);
@@ -229,6 +273,8 @@ test('legacy effective-depth callers retain d instead of having it reinterpreted
 test('invalid nonfinite inputs and infeasible reinforcement layouts fail clearly', () => {
   const nonfinite = problem(Number.POSITIVE_INFINITY);
   assert.match(validateFlexuralBeamInput(nonfinite), /finite numeric value/);
+  assert.match(validateFlexuralBeamInput(problem(300, { targetTensionStrain: Number.NaN })), /finite numeric value/);
+  assert.match(validateFlexuralBeamInput(problem(300, { targetTensionStrain: 0.003 })), /at least 0\.004/);
   assert.match(validateFlexuralBeamInput(problem(300, { b: 90 })), /usable beam width/);
 
   const tooSmall = {

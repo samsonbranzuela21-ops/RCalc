@@ -18,6 +18,7 @@ export default function FlexuralBeamDesignPage() {
   const [fc, setFc] = useState("28");
   const [fy, setFy] = useState("420");
   const [Es, setEs] = useState("200000");
+  const [targetTensionStrain, setTargetTensionStrain] = useState("");
   const [barDiameter, setBarDiameter] = useState(20);
   const [compressionBarDiameter, setCompressionBarDiameter] = useState(20);
   const [result, setResult] = useState<FlexuralBeamResult | null>(null);
@@ -33,6 +34,7 @@ export default function FlexuralBeamDesignPage() {
       Mu: Number(Mu), b: Number(b), h: Number(h), cover: Number(cover),
       stirrupDiameter: Number(stirrupDiameter), aggregateSize: Number(aggregateSize),
       fc: Number(fc), fy: Number(fy), Es: Number(Es), barDiameter, compressionBarDiameter,
+      targetTensionStrain: targetTensionStrain.trim() === "" ? undefined : Number(targetTensionStrain),
     };
     try {
       const computed = designSinglyReinforcedBeam(input);
@@ -67,13 +69,14 @@ export default function FlexuralBeamDesignPage() {
           <Field label="Concrete strength, f′c (MPa)" value={fc} onChange={(v) => update(setFc, v)} />
           <Field label="Steel yield strength, fy (MPa)" value={fy} onChange={(v) => update(setFy, v)} />
           <Field label="Steel modulus, Es (MPa)" value={Es} onChange={(v) => update(setEs, v)} />
+          <Field label="Target tension strain, εt (optional; blank uses 0.005 trial assumption)" value={targetTensionStrain} onChange={(v) => update(setTargetTensionStrain, v)} />
           <BarSelect label="Tension-bar diameter (mm)" value={barDiameter} onChange={(v) => update(setBarDiameter, v)} />
           <div className="col-span-full rounded-lg border border-[var(--border)] p-3">
             <p className="text-[11px] font-semibold">Compression-bar size for a doubly reinforced design</p>
             <p className="mt-1 text-[10px] text-[var(--text-muted)]">Used only when the singly reinforced portion cannot carry the required design moment.</p>
             <div className="mt-2 max-w-sm"><BarSelect label="Compression-bar diameter (mm)" value={compressionBarDiameter} onChange={(v) => update(setCompressionBarDiameter, v)} /></div>
           </div>
-          <p className="col-span-full text-[10px] leading-relaxed text-[var(--text-muted)]">One cover value is used on all faces and is measured to the outside of the stirrup. Design equations and detailing checks follow NSCP 2015 / ACI 318-14. The adopted design limit is <InlineKatex math="\rho_{max}=0.025" />.</p>
+          <p className="col-span-full text-[10px] leading-relaxed text-[var(--text-muted)]">One cover value is used on all faces and is measured to the outside of the stirrup. Enter εt ≥ 0.004 to set the trial neutral-axis depth using <InlineKatex math="c=\dfrac{0.003d}{0.003+\varepsilon_t}" />. If left blank, the original moment-based method uses εt = 0.005 as its initial tension-controlled assumption; the selected-bar strain and φ are checked afterward. Design equations and detailing checks follow NSCP 2015 / ACI 318-14. The adopted design limit is <InlineKatex math="\rho_{max}=0.025" />.</p>
         </div>
 
         {inputError && <div role="alert" className="mt-3 rounded-md bg-[#e05353]/15 px-3 py-2 text-xs font-semibold text-[#e05353]">{inputError}</div>}
@@ -102,6 +105,11 @@ function DesignResult({ result }: { result: FlexuralBeamResult }) {
       <ResultGroup title="Required design steel">
         <ResultRow label="Design type" value={result.sectionType === "doubly" ? "Doubly reinforced" : "Singly reinforced"} bold />
         <ResultRow label={<>Required nominal moment, <InlineKatex math="M_{n,req}" /></>} value={`${fmt(result.requiredMn)} kN·m`} />
+        {result.input.targetTensionStrain === null && <ResultRow label={<>Initial trial strain assumption, <InlineKatex math="\varepsilon_t" /></>} value="0.005 (tension-controlled)" />}
+        {result.input.targetTensionStrain !== null && <>
+          <ResultRow label={<>Target design strain, <InlineKatex math="\varepsilon_t" /></>} value={result.input.targetTensionStrain.toFixed(5)} />
+          <ResultRow label={<>Trial neutral-axis depth, <InlineKatex math="c" /></>} value={`${fmt((0.003 * (result.input.h - result.input.cover - result.input.stirrupDiameter - result.input.barDiameter / 2)) / (0.003 + result.input.targetTensionStrain))} mm`} />
+        </>}
         <ResultRow label={<>Minimum steel, <InlineKatex math="A_{s,min}" /></>} value={`${fmt(result.asMin, 1)} mm²`} />
         {result.sectionType === "doubly" ? <>
           <ResultRow label={<>Singly reinforced portion, <InlineKatex math="A_{s1}" /></>} value={`${fmt(result.asSinglyPortion, 1)} mm²`} />
