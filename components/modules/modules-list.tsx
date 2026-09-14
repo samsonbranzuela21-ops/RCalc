@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import { catalogModules } from "@/lib/modules";
+import { catalogModules, getModuleTopicCount } from "@/lib/modules";
 import { PresetBox } from "@/components/shared/PresetBox";
 import { PresetText } from "@/components/shared/PresetText";
 
@@ -84,7 +84,7 @@ export function ModulesList() {
                 as="div"
                 className="mt-0.5 truncate"
               >
-                {moduleItem.topics.length} topics · {moduleItem.description}
+                {getModuleTopicCount(moduleItem)} lesson pages · {moduleItem.description}
               </PresetText>
             </div>
 

@@ -16,6 +16,8 @@ interface Module1LessonProps {
   topics: ModuleTopicLink[];
   previousTopic: ModuleTopicLink | null;
   nextTopic: ModuleTopicLink | null;
+  embedded?: boolean;
+  topicTitle?: string;
 }
 
 export function Module1Lesson({
@@ -25,11 +27,17 @@ export function Module1Lesson({
   topics,
   previousTopic,
   nextTopic,
+  embedded = false,
+  topicTitle,
 }: Module1LessonProps) {
+  const Root = embedded ? "section" : "main";
+  const TopicHeading = embedded ? "h2" : "h1";
+  const DetailHeading = embedded ? "h3" : "h2";
+
   return (
-    <main className="module-lesson-shell min-h-screen px-4 py-8 text-[var(--text)] sm:px-6 sm:py-12 lg:px-8">
+    <Root className={embedded ? "border-t border-[var(--border)] pt-8" : "module-lesson-shell min-h-screen px-4 py-8 text-[var(--text)] sm:px-6 sm:py-12 lg:px-8"}>
       <div className="relative mx-auto max-w-6xl">
-        <div className="flex flex-wrap items-center gap-2 text-xs font-medium text-[var(--text-muted)]">
+        {!embedded && <div className="flex flex-wrap items-center gap-2 text-xs font-medium text-[var(--text-muted)]">
           <Link href="/modules" className="hover:text-[var(--blue)]">
             Modules
           </Link>
@@ -37,31 +45,31 @@ export function Module1Lesson({
           <Link href={`/modules/${moduleSlug}`} className="hover:text-[var(--blue)]">
             {moduleTitle}
           </Link>
-        </div>
+        </div>}
 
-        <header className="relative mt-5 overflow-hidden rounded-3xl border border-[var(--border)] bg-[var(--bg-surface)]/90 p-6 shadow-sm backdrop-blur-sm sm:p-9">
+        <header className={`relative ${embedded ? "" : "mt-5"} overflow-hidden rounded-3xl border border-[var(--border)] bg-[var(--bg-surface)]/90 p-6 shadow-sm backdrop-blur-sm sm:p-9`}>
           <div className="pointer-events-none absolute -right-16 -top-20 h-56 w-56 rounded-full bg-[var(--blue)]/10 blur-3xl" />
           <div className="pointer-events-none absolute -bottom-24 left-1/3 h-48 w-48 rounded-full bg-[var(--orange)]/8 blur-3xl" />
-          <div className="flex flex-wrap items-center gap-2">
+          {!embedded && <div className="flex flex-wrap items-center gap-2">
             <span className="rounded-full border border-[var(--blue)]/40 bg-[var(--blue)]/10 px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--blue)]">
               Module 1 <span aria-hidden="true">&middot;</span> {moduleTitle}
             </span>
             <span className="rounded-full border border-[var(--border)] bg-[var(--bg)] px-3 py-1.5 text-[10px] font-semibold text-[var(--text-muted)]">
               Topic {topics.findIndex((item) => item.slug === topic.slug) + 1} of {topics.length}
             </span>
-          </div>
-          <p className="relative mt-7 text-xs font-bold uppercase tracking-[0.2em] text-[var(--orange)]">
+          </div>}
+          <p className={`relative ${embedded ? "" : "mt-7"} text-xs font-bold uppercase tracking-[0.2em] text-[var(--orange)]`}>
             {topic.eyebrow}
           </p>
-          <h1 className="relative mt-3 max-w-4xl text-3xl font-extrabold tracking-[-0.035em] sm:text-4xl lg:text-5xl">
-            {topic.title}
-          </h1>
+          <TopicHeading className={`relative mt-3 max-w-4xl font-extrabold tracking-[-0.035em] ${embedded ? "text-2xl sm:text-3xl" : "text-3xl sm:text-4xl lg:text-5xl"}`}>
+            {topicTitle ?? topic.title}
+          </TopicHeading>
           <p className="relative mt-4 max-w-3xl text-sm leading-7 text-[var(--text-muted)] sm:text-base">
             {topic.summary}
           </p>
         </header>
 
-        <div className="mt-8 grid gap-6 lg:grid-cols-[minmax(0,1fr)_250px] lg:items-start">
+        <div className={embedded ? "mt-6" : "mt-8 grid gap-6 lg:grid-cols-[minmax(0,1fr)_250px] lg:items-start"}>
           <article className="min-w-0">
             <div className="overflow-x-auto rounded-2xl">
               <Module1Illustration kind={topic.illustration} />
@@ -69,7 +77,7 @@ export function Module1Lesson({
 
             <section className="mt-6 rounded-2xl border border-[var(--border)] bg-[var(--bg-surface)] p-5 shadow-sm sm:p-7">
               <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[var(--orange)]">Your learning target</p>
-              <h2 className="mt-2 text-xl font-extrabold sm:text-2xl">Learning objectives</h2>
+              <DetailHeading className="mt-2 text-xl font-extrabold sm:text-2xl">Learning objectives</DetailHeading>
               <ul className="mt-5 grid gap-3 text-sm leading-6 text-[var(--text-muted)] sm:grid-cols-2">
                 {topic.objectives.map((objective) => (
                   <li key={objective} className="flex gap-2">
@@ -92,7 +100,7 @@ export function Module1Lesson({
                       {index + 1}
                     </span>
                     <div className="min-w-0">
-                      <h2 className="text-lg font-extrabold sm:text-xl">{section.title}</h2>
+                      <DetailHeading className="text-lg font-extrabold sm:text-xl">{section.title}</DetailHeading>
                       <p className="mt-1.5 text-sm leading-6 text-[var(--text-muted)]">
                         {section.summary}
                       </p>
@@ -155,6 +163,7 @@ export function Module1Lesson({
               </p>
             </details>
 
+            {!embedded && (
             <div className="mt-6 flex flex-wrap items-center justify-between gap-3 border-t border-[var(--border)] pt-5">
               {previousTopic ? (
                 <Link
@@ -175,9 +184,10 @@ export function Module1Lesson({
                 </Link>
               )}
             </div>
+            )}
           </article>
 
-          <aside className="lg:sticky lg:top-24">
+          {!embedded && <aside className="lg:sticky lg:top-24">
             <nav
               aria-label="Module 1 topic sections"
               className="rounded-2xl border border-[var(--border)] bg-[var(--bg-surface)] p-4 shadow-sm"
@@ -212,13 +222,13 @@ export function Module1Lesson({
                 </Link>
               </div>
             </nav>
-          </aside>
+          </aside>}
         </div>
 
-        <p className="mt-8 text-xs leading-6 text-[var(--text-muted)]">
+        {!embedded && <p className="mt-8 text-xs leading-6 text-[var(--text-muted)]">
           Educational overview based on the supplied CE72 Module 1 material and the introductory NSCP 2015 / ACI 318 design framework. Always verify the adopted code edition, amendments, project specifications, and professional design requirements.
-        </p>
+        </p>}
       </div>
-    </main>
+    </Root>
   );
 }

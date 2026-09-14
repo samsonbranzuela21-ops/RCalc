@@ -1,5 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { UnitsConversion } from "@/components/module-1/units-conversion/UnitsConversion";
+import { DesignProcess } from "@/components/module-1/design-process/DesignProcess";
 
 const courseInformation = [
   ["Course", "Reinforced Concrete Design"],
@@ -61,11 +63,11 @@ export function CourseDetails() {
               Module 1: Principles of Reinforced Concrete
             </p>
             <h1 className="mt-3 text-3xl font-extrabold tracking-tight sm:text-4xl">
-              Topic 1: Course Details
+              Course Introduction, Units, and Design Process
             </h1>
             <p className="mt-4 max-w-2xl text-sm leading-7 text-[var(--text-muted)] sm:text-base">
-              An introduction to the Reinforced Concrete Design course, its
-              purpose, topics, and importance in Civil Engineering.
+              An introduction to the course, the units used in reinforced
+              concrete calculations, and the basic structural design process.
             </p>
           </div>
 
@@ -212,6 +214,9 @@ export function CourseDetails() {
             </p>
           </aside>
 
+          <UnitsConversion />
+          <DesignProcess />
+
           <nav
             aria-label="Course topic navigation"
             className="flex flex-col gap-3 border-t border-[var(--border)] pt-6 sm:flex-row sm:items-center sm:justify-between"
@@ -223,10 +228,10 @@ export function CourseDetails() {
               &larr; Back to Module 1
             </Link>
             <Link
-              href="/modules/introduction-to-rc-design/units-conversion"
+              href="/modules/introduction-to-rc-design/factors-considered-in-reinforced-concrete-design"
               className="inline-flex min-h-11 items-center justify-center rounded-lg bg-[var(--blue)] px-4 py-2 text-sm font-bold text-white hover:brightness-110"
             >
-              Next: Units Conversion &rarr;
+              Next: Factors Considered &rarr;
             </Link>
           </nav>
         </div>

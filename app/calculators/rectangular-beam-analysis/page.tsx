@@ -1,13 +1,13 @@
-import BeamCapacityCheckPage, { type BeamCapacityPrefill } from "@/components/calculators/analysis/beam-capacity-check/BeamCapacityCheckPage";
+import RectangularBeamAnalysisPage, { type RectangularBeamAnalysisPrefill } from "@/components/calculators/analysis/rectangular-beam-analysis/RectangularBeamAnalysisPage";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
 export default async function Page({ searchParams }: { searchParams: SearchParams }) {
   const params = await searchParams;
-  return <BeamCapacityCheckPage prefill={readDesignTransfer(params)} />;
+  return <RectangularBeamAnalysisPage prefill={readDesignTransfer(params)} />;
 }
 
-function readDesignTransfer(params: Awaited<SearchParams>): BeamCapacityPrefill | undefined {
+function readDesignTransfer(params: Awaited<SearchParams>): RectangularBeamAnalysisPrefill | undefined {
   if (single(params.source) !== "flexural-beam-design") return undefined;
 
   const b = positiveNumber(params.b);

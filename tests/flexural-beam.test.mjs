@@ -19,17 +19,52 @@ const area = (count, diameter) => count * Math.PI * diameter ** 2 / 4;
 const close = (actual, expected, tolerance = 1e-8) =>
   assert.ok(Math.abs(actual - expected) <= tolerance, `${actual} != ${expected}`);
 
-test('design-only solution ends with reinforcement and spacing, with valid KaTeX', () => {
+test('design solution shows every doubly reinforced calculation and final verification with valid KaTeX', () => {
   const input = problem(500, { b: 350, fc: 21, barDiameter: 32, compressionBarDiameter: 20 });
   const result = designSinglyReinforcedBeam(input);
   const solution = getDesignSolutionSteps(input, result);
   const labels = solution.map(step => step.label);
 
-  assert.ok(labels.includes('Beam 1: singly reinforced portion'));
-  assert.ok(labels.includes('Beam 2: additional tension steel'));
-  assert.ok(labels.includes('Beam 2: required compression steel'));
+  assert.ok(labels.includes('Beam 1: singly reinforced tension steel'));
+  assert.ok(labels.includes('Additional Beam 2 tension steel'));
+  assert.ok(labels.includes('Compression-steel strain'));
+  assert.ok(labels.includes('Compression-steel design stress'));
+  assert.ok(labels.includes('Required compression steel area'));
+  assert.ok(labels.includes('Tension-bar area, rounding, and provided area'));
+  assert.ok(labels.includes('Compression-bar area, rounding, and provided area'));
   assert.ok(labels.includes('Horizontal clear spacing'));
-  assert.ok(!labels.some(label => /force equilibrium|provided-section strain|moment capacity/i.test(label)));
+  assert.ok(labels.includes('Final strain and stress in every reinforcement layer'));
+  assert.ok(labels.includes('Final concrete force and force equilibrium'));
+  assert.ok(labels.includes('Final nominal moment of the provided section'));
+  assert.ok(labels.includes('Final strength-reduction factor'));
+  assert.ok(labels.includes('Final design strength and complete check'));
+  const compressionAreaStep = solution.find(step => step.label === 'Required compression steel area');
+  const compressionStrainStep = solution.find(step => step.label === 'Compression-steel strain');
+  const finalLayerStrainStep = solution.find(step => step.label === 'Final strain and stress in every reinforcement layer');
+  const rhoStep = solution.find(step => step.label === 'Required singly reinforced ratio');
+  const tensionBarCountStep = solution.find(step => step.label === 'Tension-bar area, rounding, and provided area');
+  const compressionBarCountStep = solution.find(step => step.label === 'Compression-bar area, rounding, and provided area');
+  close(result.asCompression, result.asAdditionalTension * input.fy / result.fsPrimeDesign);
+  assert.match(compressionAreaStep.formula, /A'_s=\\dfrac\{A_\{s2\}f_y\}\{f'_\{s,design\}\}/);
+  assert.ok(compressionAreaStep.substitution.includes(result.asAdditionalTension.toFixed(2)));
+  assert.ok(compressionAreaStep.substitution.includes(result.fsPrimeDesign.toFixed(2)));
+  assert.ok(compressionAreaStep.substitution.includes(result.asCompression.toFixed(2)));
+  assert.match(compressionStrainStep.formula, /0\.003\\times\\dfrac\{c_\{design\}-d'\}\{c_\{design\}\}/);
+  assert.doesNotMatch(compressionStrainStep.formula, /0\.003dfrac/);
+  assert.match(finalLayerStrainStep.formula, /0\.003\\times\\dfrac\{c-y_i\}\{c\}/);
+  assert.match(rhoStep.formula, /\\dfrac\{1-\\sqrt\{1-\\dfrac\{2mR_n\}\{f_y\}\}\}\{m\}/);
+  assert.ok(tensionBarCountStep.substitution.includes(
+    'n_{min}=\\left\\lceil ' + result.barsBeforeRounding.toFixed(4) + ' \\right\\rceil=' + Math.ceil(result.barsBeforeRounding - 1e-10),
+  ));
+  assert.ok(compressionBarCountStep.substitution.includes(
+    "n'_{min}=\\left\\lceil " + result.compressionBarsBeforeRounding.toFixed(4) + ' \\right\\rceil=' + Math.ceil(result.compressionBarsBeforeRounding - 1e-10),
+  ));
+  assert.ok(solution.every(step =>
+    ![step.formula, step.substitution, step.resultMath].some(math => math?.includes('/')),
+  ), 'every division in the displayed solution must use fraction notation');
+  assert.match(solution.find(step => step.label === 'Whitney stress-block factor').formula, /\\quad/);
+  assert.match(solution.find(step => step.label === 'Whitney stress-block factor').formula, /\\le/);
+  assert.match(solution.find(step => step.label === 'Final design strength and complete check').formula, /\\ge/);
   assert.match(solution.find(step => step.label === 'Horizontal clear spacing').formula, /b-2d_\{st\}-2C_c-n d_b/);
   assert.ok(!JSON.stringify(solution).includes('Module 4'));
   for (const step of solution) {
@@ -194,7 +229,7 @@ test('an optional target tension strain derives c and changes the strain-based d
   const expectedC = 0.003 * trialD / (0.003 + input.targetTensionStrain);
   const designSteps = getDesignSolutionSteps(input, result);
   const strainStep = designSteps.find(step => step.label === 'Target tension strain and neutral-axis depth');
-  const superpositionStep = designSteps.find(step => step.label === 'Beam 1: singly reinforced portion');
+  const superpositionStep = designSteps.find(step => step.label === 'Doubly reinforced design strain and neutral axis');
   const fullSteps = getSolutionSteps(input, result);
 
   assert.equal(result.ok, true);
@@ -202,8 +237,11 @@ test('an optional target tension strain derives c and changes the strain-based d
   assert.equal(result.sectionType, 'doubly');
   close(result.phiAssumed, 0.9);
   assert.ok(strainStep.substitution.includes(expectedC.toFixed(2)));
-  assert.ok(superpositionStep.substitution.includes('\\varepsilon_t=0.006000'));
+  assert.ok(superpositionStep.resultMath.includes('\\varepsilon_{t,design}=0.006000'));
   assert.notDeepEqual(result.compressionBarsPerLayer, defaultResult.compressionBarsPerLayer);
+  assert.ok(designSteps.every(step =>
+    ![step.formula, step.substitution, step.resultMath].some(math => math?.includes('/')),
+  ), 'target-strain solution divisions must also use fraction notation');
   for (const step of [...designSteps, ...fullSteps]) {
     for (const math of [step.formula, step.substitution, step.resultMath].filter(Boolean)) {
       assert.doesNotThrow(() => katex.renderToString(math, { throwOnError: true }), step.label);

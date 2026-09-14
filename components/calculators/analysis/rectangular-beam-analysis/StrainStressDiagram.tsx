@@ -146,7 +146,7 @@ function SinglyReinforcedDiagram({
   const bottomSteelArrowEndX =
     bottomSteelState === "tension" ? forcesX : forcesX - 50;
   const strainExtent = Math.max(Math.abs(c), Math.abs(extremeDepth - c), 1);
-  // Match the ratio-triangle orientation used by CrackingMomentDiagram:
+  // Match the ratio-triangle orientation used by RectangularCrackingMomentDiagram:
   // compression grows to the right and tension grows to the left.
   const strainTopX = strainCx + 38 * c / strainExtent;
   const strainBottomX = strainCx - 38 * (extremeDepth - c) / strainExtent;
@@ -347,7 +347,7 @@ function DoublyReinforcedDiagram({
   const aW = 46;
 
   const strainExtent = Math.max(Math.abs(c), Math.abs(extremeDepth - c), 1);
-  // Keep the strain ratio triangle oriented like the cracking-moment diagram:
+  // Keep the strain ratio triangle oriented like the rectangular-cracking-moment diagram:
   // compression is to the right of the neutral-axis line and tension to the left.
   const strainTopX = strainCx + 34 * c / strainExtent;
   const strainBottomX = strainCx - 34 * (extremeDepth - c) / strainExtent;

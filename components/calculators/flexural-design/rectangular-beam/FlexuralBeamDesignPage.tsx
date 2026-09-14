@@ -53,10 +53,10 @@ export default function FlexuralBeamDesignPage() {
       <div className="mx-auto min-w-0 max-w-6xl">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <h1 className="text-2xl font-bold">Flexural Beam Design</h1>
+            <h1 className="text-2xl font-bold">Rectangular Beam Design</h1>
             <p className="mt-1 text-xs text-[var(--text-muted)]">Design the required longitudinal reinforcement and bar spacing for a rectangular beam.</p>
           </div>
-          <Link href="/calculators/beam-capacity-check" className="text-xs font-semibold text-[#f5941f] underline underline-offset-4">Need section analysis? Open Beam Capacity Check</Link>
+          <Link href="/calculators/rectangular-beam-analysis" className="text-xs font-semibold text-[#f5941f] underline underline-offset-4">Need section analysis? Open Rectangular Beam Analysis</Link>
         </div>
 
         <div className="mt-6 grid grid-cols-1 gap-3 rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] p-4 sm:grid-cols-2 sm:p-5">
@@ -143,11 +143,11 @@ function DesignResult({ result }: { result: FlexuralBeamResult }) {
 
     <div className="mt-4 rounded-lg border border-[var(--border)] bg-[var(--bg)] p-4">
       <p className="text-xs font-semibold">Continue with section analysis</p>
-      <p className="mt-1 text-[11px] leading-relaxed text-[var(--text-muted)]">Use the adopted dimensions, cover, and bar layout in Beam Capacity Check to review neutral-axis depth, strain compatibility, steel stresses, and design moment capacity.</p>
+      <p className="mt-1 text-[11px] leading-relaxed text-[var(--text-muted)]">Use the adopted dimensions, cover, and bar layout in Rectangular Beam Analysis to review neutral-axis depth, strain compatibility, steel stresses, and design moment capacity.</p>
       {result.ok && result.tensionBarsPerLayer.length <= 2 && result.compressionBarsPerLayer.length <= 2 ? (
-        <Link href={beamCapacityAnalysisHref(result)} className="mt-3 inline-flex rounded-md border border-[#f5941f]/50 px-3 py-2 text-xs font-semibold text-[#f5941f] hover:bg-[#f5941f]/10">Analyze this design in Beam Capacity Check</Link>
+        <Link href={rectangularBeamAnalysisHref(result)} className="mt-3 inline-flex rounded-md border border-[#f5941f]/50 px-3 py-2 text-xs font-semibold text-[#f5941f] hover:bg-[#f5941f]/10">Analyze this design in Rectangular Beam Analysis</Link>
       ) : (
-        <p className="mt-3 text-[10px] text-[var(--text-muted)]">Complete a feasible design with no more than two rows at either face before transferring it to Beam Capacity Check.</p>
+        <p className="mt-3 text-[10px] text-[var(--text-muted)]">Complete a feasible design with no more than two rows at either face before transferring it to Rectangular Beam Analysis.</p>
       )}
     </div>
   </section>;
@@ -202,7 +202,7 @@ function FormulaLine({ math, muted = false }: { math: string; muted?: boolean })
 function barSchedule(layers: number[], diameter: number): string { const total = layers.reduce((sum, count) => sum + count, 0); return layers.length > 1 ? `${total}–${diameter} mm bars (${layers.join(" + ")} by layer)` : `${total}–${diameter} mm bars`; }
 function fmt(value: number | null | undefined, digits = 2): string { return value !== null && value !== undefined && Number.isFinite(value) ? value.toFixed(digits) : "—"; }
 
-function beamCapacityAnalysisHref(result: FlexuralBeamResult): string {
+function rectangularBeamAnalysisHref(result: FlexuralBeamResult): string {
   const params = new URLSearchParams({
     source: "flexural-beam-design",
     b: String(result.input.b),
@@ -218,5 +218,5 @@ function beamCapacityAnalysisHref(result: FlexuralBeamResult): string {
     compressionDiameter: String(result.input.compressionBarDiameter),
     compressionRows: result.compressionBarsPerLayer.join(","),
   });
-  return `/calculators/beam-capacity-check?${params.toString()}`;
+  return `/calculators/rectangular-beam-analysis?${params.toString()}`;
 }

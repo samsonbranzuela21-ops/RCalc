@@ -19,170 +19,56 @@ interface CalculatorSection {
 }
 
 export const stats: StatItem[] = [
-  {
-    label: "NSCP · ACI 318",
-    color: "text-[var(--green)]",
-    href: "/nscp-aci-318",
-  },
+  { label: "NSCP · ACI 318", color: "text-[var(--green)]", href: "/nscp-aci-318" },
 ];
 
 export const calculators: CalculatorSection[] = [
   {
-    label: "Analysis",
+    label: "Rectangular Beam Analysis",
     color: "slate",
     items: [
-      {
-        name: "Beam Capacity Check",
-        description: "Verify adequacy of existing RC beam section",
-        icon: "✅",
-        color: "slate",
-        href: "/calculators/beam-capacity-check",
-      },
+      { name: "Rectangular Beam Analysis", description: "Verify the capacity of an existing rectangular beam", icon: "✓", color: "slate", href: "/calculators/rectangular-beam-analysis" },
+      { name: "Cracking Moment", description: "Compute Mcr using the modulus of rupture", icon: "Mcr", color: "slate", href: "/calculators/rectangular-cracking-moment" },
     ],
   },
   {
-    label: "Flexural Design",
+    label: "Rectangular Beam Design",
     color: "blue",
     items: [
-      {
-        name: "Cracking Moment",
-        description: "Compute Mcr using modulus of rupture",
-        icon: "📉",
-        color: "blue",
-        href: "/calculators/cracking-moment",
-      },
-      {
-        name: "Rectangular Beam",
-        description: "Design singly reinforced rectangular beam",
-        icon: "▭",
-        color: "blue",
-        href: "/calculators/flexural-beam-design",
-      },
-      {
-        name: "T-Beam Design",
-        description: "Flanged section flexural design",
-        icon: "⊤",
-        color: "blue",
-        href: "/calculators/t-beam-design",
-      },
-      {
-        name: "L-Beam Design",
-        description: "L-shaped flanged section design",
-        icon: "◺",
-        color: "blue",
-        href: "/calculators/l-beam-design",
-      },
+      { name: "Rectangular Beam Design", description: "Design a reinforced rectangular beam for flexure", icon: "▭", color: "blue", href: "/calculators/flexural-beam-design" },
+      { name: "Shear Beam Design", description: "Design stirrup spacing and shear capacity", icon: "V", color: "teal", href: "/calculators/shear-capacity-design" },
+      { name: "Deflection Check", description: "Check immediate and long-term deflection", icon: "δ", color: "red", href: "/calculators/deflection-check" },
     ],
   },
   {
-    label: "Shear Design",
+    label: "T-Beam Analysis and Design",
+    color: "orange",
+    items: [
+      { name: "T-Beam Analysis", description: "Analyze the flexural capacity of an existing T-beam", icon: "T", color: "orange", href: "/calculators/t-beam-analysis" },
+      { name: "T-Beam Design", description: "Design an interior flanged beam for positive bending", icon: "T", color: "orange", href: "/calculators/t-beam-design" },
+    ],
+  },
+  {
+    label: "L-Beam Analysis and Design",
     color: "teal",
     items: [
-      {
-        name: "Shear Beam Design",
-        description: "Stirrup spacing and shear capacity",
-        icon: "✂️",
-        color: "teal",
-        href: "/calculators/shear-capacity-design",
-      },
-    ],
-  },
-  {
-    label: "Serviceability",
-    color: "red",
-    items: [
-      {
-        name: "Deflection Check",
-        description: "Immediate and long-term deflection",
-        icon: "〰️",
-        color: "red",
-        href: "/calculators/deflection-check",
-      },
+      { name: "L-Beam Analysis", description: "Analyze the flexural capacity of an existing L-beam", icon: "L", color: "teal", href: "/calculators/l-beam-analysis" },
+      { name: "L-Beam Design", description: "Design an edge flanged beam for positive bending", icon: "L", color: "teal", href: "/calculators/l-beam-design" },
     ],
   },
   {
     label: "Slab Design",
     color: "green",
     items: [
-      {
-        name: "One-Way Slab Design",
-        description: "Design reinforcement for a one-way reinforced-concrete slab",
-        href: "/calculators/one-way-slab-design",
-        icon: "▤",
-        color: "green",
-      },
+      { name: "One-Way Slab Design", description: "Design reinforcement for a one-way reinforced-concrete slab", href: "/calculators/one-way-slab-design", icon: "▤", color: "green" },
     ],
   },
   {
-    label: "Column Analysis",
+    label: "Column Analysis and Detailing",
     color: "purple",
     items: [
-      {
-        name: "Column P-M Interaction",
-        description:
-          "Check short-column capacity under axial load and bending moment",
-        icon: "▥",
-        color: "purple",
-        href: "/calculators/column-interaction",
-      },
-      {
-        name: "Column Ties and Spiral Check",
-        description:
-          "Check column ties, spacing, and spiral reinforcement detailing",
-        icon: "▥",
-        color: "red",
-        href: "/calculators/column-ties-check",
-      },
-    ],
-  },
-];
-
-export const footerColumns = [
-  {
-    title: "Product",
-    links: [
-      {
-        label: "Calculators",
-        href: "/calculators",
-      },
-      {
-        label: "Modules",
-        href: "/modules",
-      },
-      {
-        label: "Changelog",
-        href: "/changelog",
-      },
-    ],
-  },
-  {
-    title: "Resources",
-    links: [
-      {
-        label: "NSCP · ACI 318",
-        href: "/nscp-aci-318",
-      },
-      {
-        label: "References",
-        href: "/references",
-      },
-      {
-        label: "Documentation",
-        href: "/docs",
-      },
-    ],
-  },
-  {
-    title: "Company",
-    links: [
-      {
-        label: "About",
-        href: "/about",
-      },
-      {
-        label: "Contact",
-        href: "/contact",
-      },
+      { name: "Column P-M Interaction", description: "Check short-column capacity under axial load and bending moment", icon: "▥", color: "purple", href: "/calculators/column-interaction" },
+      { name: "Column Ties and Spiral Check", description: "Check column ties, spacing, and spiral reinforcement detailing", icon: "▥", color: "red", href: "/calculators/column-ties-check" },
     ],
   },
 ];

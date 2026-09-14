@@ -1,27 +1,5 @@
-import { notFound } from "next/navigation";
-
-import { Module1Lesson } from "@/components/module-1/lessons/Module1Lesson";
-import { getModule1Topic } from "@/lib/module1";
-import { catalogModules } from "@/lib/modules";
+import { Module1TopicGroupPage } from "@/components/modules/Module1TopicGroupPage";
 
 export default function ConcretePage() {
-  const module_ = catalogModules.find((item) => item.slug === "introduction-to-rc-design");
-  const topic = getModule1Topic("concrete");
-
-  if (!module_ || !topic) {
-    notFound();
-  }
-
-  const topicIndex = module_.topics.findIndex((item) => item.slug === "concrete");
-
-  return (
-    <Module1Lesson
-      moduleSlug={module_.slug}
-      moduleTitle={module_.title}
-      topic={topic}
-      topics={module_.topics}
-      previousTopic={module_.topics[topicIndex - 1] ?? null}
-      nextTopic={module_.topics[topicIndex + 1] ?? null}
-    />
-  );
+  return <Module1TopicGroupPage canonicalTopicSlug="concrete" />;
 }

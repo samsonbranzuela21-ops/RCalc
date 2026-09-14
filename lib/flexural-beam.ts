@@ -1626,15 +1626,12 @@ function restoreLatexCommands(value: string | undefined): string | undefined {
     .replace(/(?<!\\)left\(/g, "\\left(")
     .replace(/=min\(/g, "=\\min(");
   return controlsRestored.replace(
-    /(?<!\\)\b(dfrac|qquad|quad|phi|rho|sqrt|left|right|pi|lceil|rceil|ge|sum|varepsilon|beta)\b/g,
+    /(?<!\\)\b(dfrac|qquad|quad|phi|rho|sqrt|left|right|pi|lceil|rceil|ge|le|sum|varepsilon|beta|operatorname|end)\b/g,
     "\\$1",
   );
 }
 
-/**
- * Manual workflow for reinforcement design only. Capacity analysis remains an
- * internal acceptance check and is presented by the Beam Capacity Check tool.
- */
+/** Full manual workflow for reinforcement design and final provided-section checks. */
 export function getDesignSolutionSteps(
   input: FlexuralBeamInput,
   result: FlexuralBeamResult,
@@ -1653,31 +1650,77 @@ export function getDesignSolutionSteps(
     : steelFromTargetTensionStrain(normalized, result.beta1, trialD, normalized.targetTensionStrain);
   const tensionAreaPerBar = steelArea(normalized.barDiameter);
   const compressionAreaPerBar = steelArea(normalized.compressionBarDiameter);
+  const epsilonY = normalized.fy / normalized.Es;
+  const epsilonTDesign = normalized.targetTensionStrain ?? EPSILON_TENSION_CONTROLLED;
+  const initialTrialArea = Math.max(
+    targetStrainTrial?.area ?? trial.area,
+    result.rhoMin * normalized.b * trialD,
+  );
+  const firstTrialCount = Math.max(1, Math.ceil(initialTrialArea / tensionAreaPerBar));
+  const targetDesignLayout = normalized.targetTensionStrain === null
+    ? null
+    : buildGroupLayout(normalized, firstTrialCount, "tension");
+  const designD = targetDesignLayout?.valid && targetDesignLayout.d !== null
+    ? targetDesignLayout.d
+    : trialD;
+  const cDesign = (EPSILON_CU * designD) / (EPSILON_CU + epsilonTDesign);
+  const aDesign = result.beta1 * cDesign;
+  const tensionProvidedArea = result.tensionLayers.reduce((sum, layer) => sum + layer.area, 0);
+  const compressionProvidedArea = result.compressionLayers.reduce((sum, layer) => sum + layer.area, 0);
+  const minimumTensionBarCount = Number.isFinite(result.barsBeforeRounding)
+    ? Math.max(1, Math.ceil(result.barsBeforeRounding - 1e-10))
+    : result.barsRequired;
+  const minimumCompressionBarCount = Number.isFinite(result.compressionBarsBeforeRounding)
+    ? Math.max(1, Math.ceil(result.compressionBarsBeforeRounding - 1e-10))
+    : result.compressionBarsRequired;
   const referenceStrength = "NSCP 2015 Sections 421.2.2 and 422.2.2 / ACI 318-14 Sections 21.2.2 and 22.2.2.";
   const referenceSpacing = "NSCP 2015 Sections 425.2.1–425.2.2 / ACI 318-14 Sections 25.2.1–25.2.2.";
 
   steps.push({
     label: "Given design data",
-    formula: "M_u,\ b,\ h,\ C_c,\ d_{st},\ d_b,\ f'_c,\ f_y,\ E_s,\ d_{agg}",
-    substitution: `M_u=${n(normalized.Mu, 2)}\text{ kN m};\quad b=${n(normalized.b, 1)}\text{ mm};\quad h=${n(normalized.h, 1)}\text{ mm};\quad f'_c=${n(normalized.fc, 1)}\text{ MPa};\quad f_y=${n(normalized.fy, 1)}\text{ MPa}`,
+    formula: "M_u,\ b,\ h,\ C_c,\ d_{st},\ d_b,\ d'_b,\ f'_c,\ f_y,\ E_s,\ d_{agg}",
+    substitution: `M_u=${n(normalized.Mu, 2)}\\text{ kN m};\\quad b=${n(normalized.b, 1)}\\text{ mm};\\quad h=${n(normalized.h, 1)}\\text{ mm};\\quad C_c=${n(normalized.cover, 1)}\\text{ mm};\\quad d_{st}=${n(normalized.stirrupDiameter, 1)}\\text{ mm};\\quad d_b=${n(normalized.barDiameter, 1)}\\text{ mm};\\quad d'_b=${n(normalized.compressionBarDiameter, 1)}\\text{ mm};\\quad d_{agg}=${n(normalized.aggregateSize, 1)}\\text{ mm};\\quad f'_c=${n(normalized.fc, 1)}\\text{ MPa};\\quad f_y=${n(normalized.fy, 1)}\\text{ MPa};\\quad E_s=${n(normalized.Es, 0)}\\text{ MPa}`,
     result: "The beam is designed for positive factored moment using the entered tension-bar size. Compression bars are added only when a singly reinforced design is insufficient.",
     reference: "NSCP 2015 Chapter 4 / ACI 318-14 Chapters 9, 21, 22, and 25.",
     status: "info",
   });
 
   steps.push({
+    label: "Whitney stress-block factor",
+    formula: normalized.fc <= 28
+      ? "\\beta_1=0.85\\quad(f'_c\\le28\\text{ MPa})"
+      : "\\beta_1=0.85-0.05\\left(\\dfrac{f'_c-28}{7}\\right)\\ge0.65",
+    substitution: normalized.fc <= 28
+      ? `f'_c=${n(normalized.fc, 1)}\\text{ MPa}\\le28\\text{ MPa}`
+      : `\\beta_1=0.85-0.05\\left(\\dfrac{${n(normalized.fc, 1)}-28}{7}\\right)=${n(result.beta1, 3)}`,
+    result: `Use β1 = ${n(result.beta1, 3)}.`,
+    resultMath: `\\beta_1=${n(result.beta1, 3)}`,
+    reference: referenceStrength,
+  });
+
+  steps.push({
+    label: "Steel yield strain and trial strength-reduction factor",
+    formula: "\\varepsilon_y=\\dfrac{f_y}{E_s};\\qquad \\phi_{trial}=\\phi(\\varepsilon_{t,design})",
+    substitution: `\\varepsilon_y=\\dfrac{${n(normalized.fy, 1)}}{${n(normalized.Es, 0)}}=${n(epsilonY, 6)};\\quad \\varepsilon_{t,design}=${n(epsilonTDesign, 6)};\\quad \\phi_{trial}=${n(result.phiAssumed, 3)}`,
+    result: normalized.targetTensionStrain === null
+      ? "No target strain was entered, so εt = 0.005 is used for the initial tension-controlled design trial."
+      : "The entered target tension strain establishes the trial φ used for design.",
+    reference: "NSCP 2015 Table 421.2.2 / ACI 318-14 Table 21.2.2.",
+  });
+
+  steps.push({
     label: "Effective depth from the reinforcement geometry",
     formula: normalized.legacyEffectiveDepth
       ? "d=d_{legacy}"
-      : "d_{trial}=h-C_c-d_{st}-\dfrac{d_b}{2};\qquad d=h-\bar y_s",
+      : "d_{trial}=h-C_c-d_{st}-\\dfrac{d_b}{2};\\qquad d=h-\\bar y_s",
     substitution: normalized.legacyEffectiveDepth
-      ? `d=${n(result.d, 2)}\text{ mm}`
-      : `d_{trial}=${n(normalized.h, 1)}-${n(normalized.cover, 1)}-${n(normalized.stirrupDiameter, 1)}-\dfrac{${n(normalized.barDiameter, 1)}}{2}=${n(trialD, 2)}\text{ mm};\quad d_{final}=${n(result.d, 2)}\text{ mm}`,
+      ? `d=${n(result.d, 2)}\\text{ mm}`
+      : `d_{trial}=${n(normalized.h, 1)}-${n(normalized.cover, 1)}-${n(normalized.stirrupDiameter, 1)}-\\dfrac{${n(normalized.barDiameter, 1)}}{2}=${n(trialD, 2)}\\text{ mm};\\quad d_{final}=${n(result.d, 2)}\\text{ mm}`,
     result: result.tensionBarLayers > 1
       ? `The adopted bars require ${result.tensionBarLayers} layers, so the final effective depth is measured to their area-weighted centroid.`
       : `The adopted tension bars fit in one layer; the effective depth is ${n(result.d, 2)} mm.`,
     resultMath: result.tensionLayers.length
-      ? `\bar y_s=\dfrac{${result.tensionLayers.map((layer) => `(${n(layer.area, 2)})(${n(layer.yFromTensionFace, 2)})`).join("+")}}{${result.tensionLayers.map((layer) => n(layer.area, 2)).join("+")}}=${n(result.h - result.d, 2)}\text{ mm}`
+      ? `\\bar y_s=\\dfrac{${result.tensionLayers.map((layer) => `(${n(layer.area, 2)})(${n(layer.yFromTensionFace, 2)})`).join("+")}}{${result.tensionLayers.map((layer) => n(layer.area, 2)).join("+")}}=${n(result.h - result.d, 2)}\\text{ mm}`
       : undefined,
     explanation: normalized.legacyEffectiveDepth
       ? "A legacy caller supplied an effective depth, so that value is preserved as d."
@@ -1687,101 +1730,336 @@ export function getDesignSolutionSteps(
   if (targetStrainTrial) {
     steps.push({
       label: "Target tension strain and neutral-axis depth",
-      formula: "c=\dfrac{0.003}{0.003+\varepsilon_t}d;\quad a=\beta_1c;\quad A_{s,design}=\dfrac{0.85f'_cba}{f_y}",
-      substitution: `\varepsilon_t=${n(normalized.targetTensionStrain, 6)};\quad c=\dfrac{0.003}{0.003+${n(normalized.targetTensionStrain, 6)}}(${n(trialD, 2)})=${n(targetStrainTrial.c, 2)}\text{ mm};\quad a=(${n(result.beta1, 3)})(${n(targetStrainTrial.c, 2)})=${n(targetStrainTrial.a, 2)}\text{ mm};\quad A_{s,design}=${n(targetStrainTrial.area, 2)}\text{ mm}^2`,
+      formula: "c=\\dfrac{0.003}{0.003+\\varepsilon_t}d;\\quad a=\\beta_1c;\\quad A_{s,design}=\\dfrac{0.85f'_cba}{f_y}",
+      substitution: `\\varepsilon_t=${n(normalized.targetTensionStrain, 6)};\\quad c=\\dfrac{0.003}{0.003+${n(normalized.targetTensionStrain, 6)}}(${n(trialD, 2)})=${n(targetStrainTrial.c, 2)}\\text{ mm};\\quad a=(${n(result.beta1, 3)})(${n(targetStrainTrial.c, 2)})=${n(targetStrainTrial.a, 2)}\\text{ mm};\\quad A_{s,design}=${n(targetStrainTrial.area, 2)}\\text{ mm}^2`,
       result: "The supplied tension strain establishes the trial neutral-axis depth and the corresponding singly reinforced concrete-block steel area.",
       reference: referenceStrength,
     });
   }
 
   steps.push({
-    label: "Required nominal moment and singly reinforced trial",
-    formula: targetStrainTrial
-      ? "M_{n,req}=\dfrac{M_u}{\phi_{assumed}};\quad \rho_{design}=\dfrac{A_{s,design}}{bd}"
-      : "M_{n,req}=\dfrac{M_u}{\phi};\qquad R_n=\dfrac{M_{n,req}}{b d^2};\qquad \rho=\dfrac{1-\sqrt{1-2mR_n/f_y}}{m};\quad m=\dfrac{f_y}{0.85f'_c}",
-    substitution: targetStrainTrial
-      ? `\phi_{assumed}=${n(result.phiAssumed, 3)};\quad M_{n,req}=\dfrac{${n(normalized.Mu, 2)}}{${n(result.phiAssumed, 3)}}=${n(result.requiredMn, 2)}\text{ kN m};\quad \rho_{design}=${n(targetStrainTrial.rho, 6)}`
-      : `\phi=0.90;\quad M_{n,req}=\dfrac{${n(normalized.Mu, 2)}}{0.90}=${n(result.requiredMn, 2)}\text{ kN m};\quad R_n=${n(trial.Rn, 4)}\text{ MPa};\quad \rho=${n(trial.rho, 6)}`,
-    result: result.sectionType === "singly"
-      ? "The singly reinforced trial supplies the required design steel."
-      : "The singly reinforced portion is insufficient, so the remaining moment is assigned to a tension-compression steel couple.",
+    label: "Required nominal moment",
+    formula: "M_{n,req}=\\dfrac{M_u}{\\phi_{trial}}",
+    substitution: `M_{n,req}=\\dfrac{${n(normalized.Mu, 2)}}{${n(result.phiAssumed, 3)}}=${n(result.requiredMn, 3)}\\text{ kN m}`,
+    result: "This is the nominal moment that the trial reinforcement must provide.",
+    resultMath: `M_{n,req}=${n(result.requiredMn, 3)}\\text{ kN m}=${n(result.requiredMn * 1e6, 0)}\\text{ N mm}`,
     reference: referenceStrength,
   });
 
-  steps.push({
-    label: "Minimum and maximum reinforcement",
-    formula: "\rho_{min}=\max\left(\dfrac{\sqrt{f'_c}}{4f_y},\dfrac{1.4}{f_y}\right);\quad A_{s,min}=\rho_{min}bd;\quad \rho_{max}=0.025",
-    substitution: `\rho_{min}=${n(result.rhoMin, 6)};\quad A_{s,min}=${n(result.asMin, 2)}\text{ mm}^2;\quad \rho_{required}=${n(result.rhoRequired, 6)};\quad \rho_{provided}=${n(result.rhoProvided, 6)}`,
-    result: `Minimum steel: ${result.minimumSteelOk ? "PASS" : "FAIL"}. Required ratio limit: ${result.requiredRhoLimitOk ? "PASS" : "FAIL"}. Provided ratio limit: ${result.rhoLimitOk ? "PASS" : "FAIL"}.`,
-    reference: "NSCP 2015 Sections 409.6.1.2 and 418.6.3.1 / ACI 318-14 Sections 9.6.1.2 and 18.6.3.1.",
-    status: result.minimumSteelOk && result.requiredRhoLimitOk && result.rhoLimitOk ? "pass" : "fail",
-  });
-
-  if (result.sectionType === "doubly") {
-    const epsilonTDesign = normalized.targetTensionStrain ?? EPSILON_TENSION_CONTROLLED;
-    const cDesign = (EPSILON_CU * trialD) / (EPSILON_CU + epsilonTDesign);
-    const aDesign = result.beta1 * cDesign;
+  if (!targetStrainTrial) {
+    const m = normalized.fy / (0.85 * normalized.fc);
+    const discriminant = 1 - 2 * m * trial.Rn / normalized.fy;
     steps.push({
-      label: "Beam 1: singly reinforced portion",
-      formula: "c=\dfrac{0.003}{0.003+\varepsilon_t}d;\quad a=\beta_1c;\quad A_{s1}=\dfrac{0.85f'_cba}{f_y};\quad M_{n1}=A_{s1}f_y\left(d-\dfrac{a}{2}\right)",
-      substitution: `\varepsilon_t=${n(epsilonTDesign, 6)};\quad c=${n(cDesign, 2)}\text{ mm};\quad a=${n(aDesign, 2)}\text{ mm};\quad A_{s1}=${n(result.asSinglyPortion, 2)}\text{ mm}^2`,
-      result: "Beam 1 is the singly reinforced contribution used in the design superposition at the selected target strain.",
-      resultMath: `M_{n1}=${n(result.mnSingly, 2)}\text{ kN m}`,
+      label: "Singly reinforced strength parameter",
+      formula: "R_n=\\dfrac{M_{n,req}}{bd^2};\\qquad m=\\dfrac{f_y}{0.85f'_c}",
+      substitution: `R_n=\\dfrac{${n(result.requiredMn * 1e6, 0)}}{(${n(normalized.b, 1)})(${n(trialD, 2)})^2}=${n(trial.Rn, 6)}\\text{ MPa};\\quad m=\\dfrac{${n(normalized.fy, 1)}}{0.85(${n(normalized.fc, 1)})}=${n(m, 6)}`,
+      result: "Rn and m are used in the quadratic solution for the required reinforcement ratio.",
       reference: referenceStrength,
     });
-
     steps.push({
-      label: "Beam 2: additional tension steel",
-      formula: "M_{n2}=M_{n,req}-M_{n1};\qquad A_{s2}=\dfrac{M_{n2}}{f_y(d-d')}",
-      substitution: `M_{n2}=${n(result.requiredMn, 2)}-${n(result.mnSingly, 2)}=${n(result.mnRemaining, 2)}\text{ kN m};\quad A_{s2}=\dfrac{${n((result.mnRemaining ?? 0) * 1e6, 0)}}{${n(normalized.fy, 1)}[${n(trialD, 2)}-${n(designDPrime, 2)}]}=${n(result.asAdditionalTension, 2)}\text{ mm}^2`,
-      result: "The total required bottom reinforcement is the sum of the Beam 1 steel and the additional Beam 2 tension steel.",
-      resultMath: `A_s=A_{s1}+A_{s2}=${n(result.asSinglyPortion, 2)}+${n(result.asAdditionalTension, 2)}=${n(result.asRequired, 2)}\text{ mm}^2`,
+      label: "Required singly reinforced ratio",
+      formula: "\\rho=\\dfrac{1-\\sqrt{1-\\dfrac{2mR_n}{f_y}}}{m}",
+      substitution: `\\rho=\\dfrac{1-\\sqrt{1-\\dfrac{2(${n(m, 6)})(${n(trial.Rn, 6)})}{${n(normalized.fy, 1)}}}}{${n(m, 6)}}=${n(trial.rho, 6)};\\quad \\Delta=1-\\dfrac{2mR_n}{f_y}=${n(discriminant, 6)}`,
+      result: Number.isFinite(trial.rho)
+        ? `The calculated trial reinforcement ratio is ${n(trial.rho, 6)}.`
+        : "The singly reinforced quadratic has no real solution, so doubly reinforced design is required.",
       reference: referenceStrength,
+      status: Number.isFinite(trial.rho) ? "pass" : "fail",
     });
-
     steps.push({
-      label: "Beam 2: required compression steel",
-      formula: "d'=C_c+d_{st}+\dfrac{d'_b}{2};\quad \varepsilon'_s=0.003\dfrac{c-d'}{c};\quad f'_s=\min(E_s\varepsilon'_s,f_y);\quad A'_s=\dfrac{A_{s2}f_y}{f'_s}",
-      substitution: `d'=${n(designDPrime, 2)}\text{ mm};\quad \varepsilon'_{s,design}=${n(result.epsilonSPrimeDesign, 6)};\quad f'_{s,design}=${n(result.fsPrimeDesign, 2)}\text{ MPa};\quad A'_s=${n(result.asCompression, 2)}\text{ mm}^2`,
-      result: "Compression steel is sized from force equilibrium; its stress is limited to fy when the design strain would cause yielding.",
+      label: "Calculated singly reinforced steel area",
+      formula: "A_{s,calc}=\\rho bd",
+      substitution: `A_{s,calc}=(${n(trial.rho, 6)})(${n(normalized.b, 1)})(${n(trialD, 2)})=${n(trial.area, 2)}\\text{ mm}^2`,
+      result: "This is the tension-steel area required by the moment equation before the minimum-steel check.",
+      resultMath: `A_{s,calc}=${n(trial.area, 2)}\\text{ mm}^2`,
       reference: referenceStrength,
     });
   }
 
   steps.push({
-    label: "Select whole bars",
-    formula: "A_b=\dfrac{\pi d_b^2}{4};\quad n_{raw}=\dfrac{A_{s,required}}{A_b};\quad n=\left\lceil n_{raw}\right\rceil",
-    substitution: `A_b=\dfrac{\pi(${n(normalized.barDiameter, 1)})^2}{4}=${n(tensionAreaPerBar, 2)}\text{ mm}^2;\quad n_{raw}=${n(result.barsBeforeRounding, 3)};\quad n=${result.barsRequired}` + (result.compressionBarsRequired > 0 ? `;\quad A'_b=${n(compressionAreaPerBar, 2)}\text{ mm}^2;\quad n'=${result.compressionBarsRequired}` : ""),
-    result: `Adopt ${result.barsRequired} bottom bars (${result.tensionBarsPerLayer.join(" + ")} by layer)` + (result.compressionBarsRequired > 0 ? ` and ${result.compressionBarsRequired} top bars (${result.compressionBarsPerLayer.join(" + ")} by layer).` : "."),
-    resultMath: `A_{s,provided}=${n(result.asProvided, 2)}\text{ mm}^2\ ${result.asProvided + 1e-8 >= result.asRequired ? "\ge" : "<"}\ A_{s,required}=${n(result.asRequired, 2)}\text{ mm}^2`,
+    label: "Minimum tension reinforcement",
+    formula: "\\rho_{min}=\\max\\left(\\dfrac{\\sqrt{f'_c}}{4f_y},\\dfrac{1.4}{f_y}\\right);\\quad A_{s,min}=\\rho_{min}bd",
+    substitution: `\\rho_{min}=\\max\\left(\\dfrac{\\sqrt{${n(normalized.fc, 1)}}}{4(${n(normalized.fy, 1)})},\\dfrac{1.4}{${n(normalized.fy, 1)}}\\right)=${n(result.rhoMin, 6)};\\quad A_{s,min}=(${n(result.rhoMin, 6)})(${n(normalized.b, 1)})(${n(result.d, 2)})=${n(result.asMin, 2)}\\text{ mm}^2`,
+    result: `The provided tension reinforcement ${result.minimumSteelOk ? "meets" : "does not meet"} the minimum requirement.`,
+    resultMath: `A_{s,provided}=${n(result.asProvided, 2)}\\text{ mm}^2\ ${result.minimumSteelOk ? "\\ge" : "<"}\ A_{s,min}=${n(result.asMin, 2)}\\text{ mm}^2`,
+    reference: "NSCP 2015 Section 409.6.1.2 / ACI 318-14 Section 9.6.1.2.",
+    status: result.minimumSteelOk ? "pass" : "fail",
+  });
+
+  steps.push({
+    label: "Maximum reinforcement ratio",
+    formula: "\\rho_{max}=0.025;\\quad \\rho_{required}=\\dfrac{A_{s,required}}{bd};\\quad \\rho_{provided}=\\dfrac{A_{s,provided}}{bd}",
+    substitution: `\\rho_{required}=\\dfrac{${n(result.asRequired, 2)}}{(${n(normalized.b, 1)})(${n(result.d, 2)})}=${n(result.rhoRequired, 6)};\\quad \\rho_{provided}=\\dfrac{${n(result.asProvided, 2)}}{(${n(normalized.b, 1)})(${n(result.d, 2)})}=${n(result.rhoProvided, 6)};\\quad \\rho_{max}=0.025`,
+    result: `Required ratio: ${result.requiredRhoLimitOk ? "PASS" : "FAIL"}. Provided ratio: ${result.rhoLimitOk ? "PASS" : "FAIL"}.`,
+    reference: "NSCP 2015 Section 418.6.3.1 / ACI 318-14 Section 18.6.3.1.",
+    status: result.requiredRhoLimitOk && result.rhoLimitOk ? "pass" : "fail",
+  });
+
+  if (result.sectionType === "doubly") {
+    steps.push({
+      label: "Doubly reinforced design strain and neutral axis",
+      formula: "c_{design}=\\dfrac{0.003d_{design}}{0.003+\\varepsilon_{t,design}}",
+      substitution: `c_{design}=\\dfrac{0.003(${n(designD, 2)})}{0.003+${n(epsilonTDesign, 6)}}=${n(cDesign, 2)}\\text{ mm}`,
+      result: "The neutral axis for the design superposition follows strain compatibility.",
+      resultMath: `d_{design}=${n(designD, 2)}\\text{ mm};\\quad \\varepsilon_{t,design}=${n(epsilonTDesign, 6)};\\quad c_{design}=${n(cDesign, 2)}\\text{ mm}`,
+      reference: referenceStrength,
+    });
+
+    steps.push({
+      label: "Beam 1 concrete stress-block depth",
+      formula: "a_{design}=\\beta_1c_{design}",
+      substitution: `a_{design}=(${n(result.beta1, 3)})(${n(cDesign, 2)})=${n(aDesign, 2)}\\text{ mm}`,
+      result: "This Whitney block defines the singly reinforced portion of the doubly reinforced design.",
+      resultMath: `a_{design}=${n(aDesign, 2)}\\text{ mm}`,
+      reference: referenceStrength,
+    });
+
+    steps.push({
+      label: "Beam 1: singly reinforced tension steel",
+      formula: "C_c=0.85f'_cba_{design}=A_{s1}f_y;\\qquad A_{s1}=\\dfrac{0.85f'_cba_{design}}{f_y}",
+      substitution: `A_{s1}=\\dfrac{0.85(${n(normalized.fc, 1)})(${n(normalized.b, 1)})(${n(aDesign, 2)})}{${n(normalized.fy, 1)}}=${n(result.asSinglyPortion, 2)}\\text{ mm}^2`,
+      result: "As1 balances the concrete compression block in Beam 1.",
+      resultMath: `A_{s1}=${n(result.asSinglyPortion, 2)}\\text{ mm}^2`,
+      reference: referenceStrength,
+    });
+
+    steps.push({
+      label: "Beam 1 nominal moment",
+      formula: "M_{n1}=A_{s1}f_y\\left(d_{design}-\\dfrac{a_{design}}{2}\\right)",
+      substitution: `M_{n1}=(${n(result.asSinglyPortion, 2)})(${n(normalized.fy, 1)})\\left(${n(designD, 2)}-\\dfrac{${n(aDesign, 2)}}{2}\\right)\\dfrac{1\\text{ kN m}}{10^6\\text{ N mm}}=${n(result.mnSingly, 3)}\\text{ kN m}`,
+      result: "Beam 1 carries this portion of the required nominal moment.",
+      resultMath: `M_{n1}=${n(result.mnSingly, 3)}\\text{ kN m}`,
+      reference: referenceStrength,
+    });
+
+    steps.push({
+      label: "Beam 2 remaining nominal moment",
+      formula: "M_{n2}=M_{n,req}-M_{n1}",
+      substitution: `M_{n2}=${n(result.requiredMn, 3)}-${n(result.mnSingly, 3)}=${n(result.mnRemaining, 3)}\\text{ kN m}`,
+      result: "Beam 2 assigns the remaining moment to the tension-compression steel couple.",
+      resultMath: `M_{n2}=${n(result.mnRemaining, 3)}\\text{ kN m}`,
+      reference: referenceStrength,
+    });
+
+    steps.push({
+      label: "Compression-steel trial depth",
+      formula: "d'=C_c+d_{st}+\\dfrac{d'_b}{2}",
+      substitution: normalized.legacyEffectiveDepth
+        ? `d'=${n(designDPrime, 2)}\\text{ mm}\\quad(\\text{supplied effective depth})`
+        : `d'=${n(normalized.cover, 1)}+${n(normalized.stirrupDiameter, 1)}+\\dfrac{${n(normalized.compressionBarDiameter, 1)}}{2}=${n(designDPrime, 2)}\\text{ mm}`,
+      result: "The compression-steel depth is measured from the extreme compression face.",
+      resultMath: `d'=${n(designDPrime, 2)}\\text{ mm}`,
+      reference: referenceSpacing,
+    });
+
+    steps.push({
+      label: "Additional Beam 2 tension steel",
+      formula: "A_{s2}=\\dfrac{M_{n2}}{f_y(d_{design}-d')}",
+      substitution: `A_{s2}=\\dfrac{${n((result.mnRemaining ?? 0) * 1e6, 0)}}{(${n(normalized.fy, 1)})(${n(designD, 2)}-${n(designDPrime, 2)})}=${n(result.asAdditionalTension, 2)}\\text{ mm}^2`,
+      result: "As2 is the extra bottom steel required for the Beam 2 steel couple.",
+      resultMath: `A_{s2}=${n(result.asAdditionalTension, 2)}\\text{ mm}^2`,
+      reference: referenceStrength,
+    });
+
+    steps.push({
+      label: "Compression-steel strain",
+      formula: "\\varepsilon'_{s,design}=0.003\\times\\dfrac{c_{design}-d'}{c_{design}}",
+      substitution: `\\varepsilon'_{s,design}=0.003\\times\\dfrac{${n(cDesign, 2)}-${n(designDPrime, 2)}}{${n(cDesign, 2)}}=${n(result.epsilonSPrimeDesign, 6)}`,
+      result: "This strain is obtained from the linear strain diagram at the compression-steel depth.",
+      resultMath: `\\varepsilon'_{s,design}=${n(result.epsilonSPrimeDesign, 6)}`,
+      reference: referenceStrength,
+    });
+
+    steps.push({
+      label: "Compression-steel design stress",
+      formula: "f'_{s,design}=\\min(E_s\\varepsilon'_{s,design},f_y)",
+      substitution: `E_s\\varepsilon'_{s,design}=(${n(normalized.Es, 0)})(${n(result.epsilonSPrimeDesign, 6)})=${n((result.epsilonSPrimeDesign ?? 0) * normalized.Es, 2)}\\text{ MPa};\\quad f'_{s,design}=\\min(${n((result.epsilonSPrimeDesign ?? 0) * normalized.Es, 2)},${n(normalized.fy, 1)})=${n(result.fsPrimeDesign, 2)}\\text{ MPa}`,
+      result: (result.fsPrimeDesign ?? 0) + 1e-8 >= normalized.fy
+        ? "The compression steel reaches fy in the design trial."
+        : "The compression steel remains elastic, so its calculated stress is used.",
+      resultMath: `f'_{s,design}=${n(result.fsPrimeDesign, 2)}\\text{ MPa}`,
+      reference: referenceStrength,
+    });
+
+    steps.push({
+      label: "Required compression steel area",
+      formula: "A'_sf'_{s,design}=A_{s2}f_y;\\qquad A'_s=\\dfrac{A_{s2}f_y}{f'_{s,design}}",
+      substitution: `A'_s=\\dfrac{(${n(result.asAdditionalTension, 2)})(${n(normalized.fy, 1)})}{${n(result.fsPrimeDesign, 2)}}=${n(result.asCompression, 2)}\\text{ mm}^2`,
+      result: "This is the required top compression-steel area from equilibrium of the Beam 2 steel couple.",
+      resultMath: `A'_s=${n(result.asCompression, 2)}\\text{ mm}^2`,
+      reference: referenceStrength,
+    });
+
+    steps.push({
+      label: "Total required tension steel",
+      formula: "A_s=A_{s1}+A_{s2}",
+      substitution: `A_s=${n(result.asSinglyPortion, 2)}+${n(result.asAdditionalTension, 2)}=${n(result.asRequired, 2)}\\text{ mm}^2`,
+      result: "The required bottom reinforcement is the sum of the Beam 1 and Beam 2 tension steel.",
+      resultMath: `A_s=${n(result.asRequired, 2)}\\text{ mm}^2`,
+      reference: referenceStrength,
+    });
+  }
+
+  steps.push({
+    label: "Tension-bar area, rounding, and provided area",
+    formula: "A_b=\\dfrac{\\pi d_b^2}{4};\\quad n_{raw}=\\dfrac{A_{s,required}}{A_b};\\quad n_{min}=\\left\\lceil n_{raw}\\right\\rceil;\\quad A_{s,provided}=n_{adopted}A_b",
+    substitution: `A_b=\\dfrac{\\pi(${n(normalized.barDiameter, 1)})^2}{4}=${n(tensionAreaPerBar, 2)}\\text{ mm}^2;\\quad n_{raw}=\\dfrac{${n(result.asRequired, 2)}}{${n(tensionAreaPerBar, 2)}}=${n(result.barsBeforeRounding, 4)};\\quad n_{min}=\\left\\lceil ${n(result.barsBeforeRounding, 4)} \\right\\rceil=${minimumTensionBarCount};\\quad A_{s,provided}=(${result.barsRequired})(${n(tensionAreaPerBar, 2)})=${n(tensionProvidedArea, 2)}\\text{ mm}^2`,
+    result: result.barsRequired > minimumTensionBarCount
+      ? `The area calculation requires at least ${minimumTensionBarCount} bars. ${result.barsRequired} bottom bars are adopted because the smaller provided-bar layout does not pass every final design check.`
+      : `Adopt ${result.barsRequired} bottom bars arranged ${result.tensionBarsPerLayer.join(" + ")} by layer.`,
+    resultMath: `A_{s,provided}=${n(tensionProvidedArea, 2)}\\text{ mm}^2\ ${tensionProvidedArea + 1e-8 >= result.asRequired ? "\\ge" : "<"}\ A_{s,required}=${n(result.asRequired, 2)}\\text{ mm}^2`,
     status: result.asProvided + 1e-8 >= result.asRequired ? "pass" : "fail",
   });
 
+  if (result.compressionBarsRequired > 0) {
+    steps.push({
+      label: "Compression-bar area, rounding, and provided area",
+      formula: "A'_b=\\dfrac{\\pi {d'_b}^2}{4};\\quad n'_{raw}=\\dfrac{A'_s}{A'_b};\\quad n'_{min}=\\left\\lceil n'_{raw}\\right\\rceil;\\quad A'_{s,provided}=n'_{adopted}A'_b",
+      substitution: `A'_b=\\dfrac{\\pi(${n(normalized.compressionBarDiameter, 1)})^2}{4}=${n(compressionAreaPerBar, 2)}\\text{ mm}^2;\\quad n'_{raw}=\\dfrac{${n(result.asCompression, 2)}}{${n(compressionAreaPerBar, 2)}}=${n(result.compressionBarsBeforeRounding, 4)};\\quad n'_{min}=\\left\\lceil ${n(result.compressionBarsBeforeRounding, 4)} \\right\\rceil=${minimumCompressionBarCount};\\quad A'_{s,provided}=(${result.compressionBarsRequired})(${n(compressionAreaPerBar, 2)})=${n(compressionProvidedArea, 2)}\\text{ mm}^2`,
+      result: result.compressionBarsRequired > minimumCompressionBarCount
+        ? `The area calculation requires at least ${minimumCompressionBarCount} top bars. ${result.compressionBarsRequired} are adopted because the smaller provided-bar layout does not pass every final design check.`
+        : `Adopt ${result.compressionBarsRequired} top bars arranged ${result.compressionBarsPerLayer.join(" + ")} by layer.`,
+      resultMath: `A'_{s,provided}=${n(compressionProvidedArea, 2)}\\text{ mm}^2\ ${compressionProvidedArea + 1e-8 >= (result.asCompression ?? 0) ? "\\ge" : "<"}\ A'_s=${n(result.asCompression, 2)}\\text{ mm}^2`,
+      status: compressionProvidedArea + 1e-8 >= (result.asCompression ?? 0) ? "pass" : "fail",
+    });
+  }
+
+  steps.push({
+    label: "Adopted reinforcement layers and final centroids",
+    formula: "A_i=n_iA_b;\\qquad \\bar y=\\dfrac{\\sum A_i y_i}{\\sum A_i};\\qquad d=h-\\bar y_s",
+    substitution: `${result.tensionLayers.map((layer) => `A_{s${layer.index}}=(${layer.count})(${n(layer.areaPerBar, 2)})=${n(layer.area, 2)}\\text{ mm}^2,\ y_{s${layer.index}}=${n(layer.yFromTensionFace, 2)}\\text{ mm}`).join(";\\quad ")}` + (result.compressionLayers.length ? `;\\quad ${result.compressionLayers.map((layer) => `A'_{s${layer.index}}=(${layer.count})(${n(layer.areaPerBar, 2)})=${n(layer.area, 2)}\\text{ mm}^2,\ y'_{s${layer.index}}=${n(layer.yFromCompressionFace, 2)}\\text{ mm}`).join(";\\quad ")}` : ""),
+    result: "The effective depths are recalculated from the actual adopted bar layers.",
+    resultMath: `d=${n(result.d, 2)}\\text{ mm}` + (result.dPrime !== null ? `;\\quad d'=${n(result.dPrime, 2)}\\text{ mm}` : ""),
+    reference: referenceSpacing,
+  });
+
   const tensionSpacing = result.tensionLayers.map((layer) => layer.count === 1
-    ? `\text{Layer ${layer.index}: one bar; no horizontal interbar gap}`
-    : `\text{Layer ${layer.index}: }s_{clear}=\dfrac{${n(normalized.b, 1)}-2(${n(normalized.stirrupDiameter, 1)})-2(${n(normalized.cover, 1)})-${layer.count}(${n(layer.barDiameter, 1)})}{${layer.count - 1}}=${n(layer.uniformSpreadClearSpacing, 2)}\text{ mm}`,
-  ).join(";\quad ");
+    ? `\\text{Layer ${layer.index}: one bar; no horizontal interbar gap}`
+    : `\\text{Layer ${layer.index}: }s_{clear}=\\dfrac{${n(normalized.b, 1)}-2(${n(normalized.stirrupDiameter, 1)})-2(${n(normalized.cover, 1)})-${layer.count}(${n(layer.barDiameter, 1)})}{${layer.count - 1}}=${n(layer.uniformSpreadClearSpacing, 2)}\\text{ mm}`,
+  ).join(";\\quad ");
   steps.push({
     label: "Horizontal clear spacing",
-    formula: "s_{clear,min}=\max\left(25,d_b,\dfrac{4d_{agg}}{3}\right);\quad b_{inside}=b-2(C_c+d_{st});\quad s_{clear}=\dfrac{b-2d_{st}-2C_c-n d_b}{n-1}",
-    substitution: `s_{clear,min}=\max\left(25,${n(normalized.barDiameter, 1)},\dfrac{4(${n(normalized.aggregateSize, 1)})}{3}\right)=${n(result.minClearSpacingRequired, 2)}\text{ mm};\quad b_{inside}=${n(result.insideWidth, 2)}\text{ mm};\quad ${tensionSpacing}`,
+    formula: "s_{clear,min}=\\max\\left(25,d_b,\\dfrac{4d_{agg}}{3}\\right);\\quad b_{inside}=b-2(C_c+d_{st});\\quad s_{clear}=\\dfrac{b-2d_{st}-2C_c-n d_b}{n-1}",
+    substitution: `s_{clear,min}=\\max\\left(25,${n(normalized.barDiameter, 1)},\\dfrac{4(${n(normalized.aggregateSize, 1)})}{3}\\right)=${n(result.minClearSpacingRequired, 2)}\\text{ mm};\\quad b_{inside}=${n(result.insideWidth, 2)}\\text{ mm};\\quad ${tensionSpacing}`,
     result: `Every adopted tension-bar layer ${result.spacingOk ? "meets" : "does not meet"} the required horizontal clear spacing (${result.spacingOk ? "PASS" : "FAIL"}).`,
     explanation: "Clear spacing is the concrete gap between adjacent bar surfaces. For a one-bar layer, there is no adjacent-bar gap and no division by zero.",
     reference: referenceSpacing,
     status: result.spacingOk ? "pass" : "fail",
   });
 
+  if (result.compressionLayers.length > 0) {
+    const compressionSpacing = result.compressionLayers.map((layer) => layer.count === 1
+      ? `\\text{Layer ${layer.index}: one bar; no horizontal interbar gap}`
+      : `\\text{Layer ${layer.index}: }s'_{clear}=\\dfrac{${n(normalized.b, 1)}-2(${n(normalized.stirrupDiameter, 1)})-2(${n(normalized.cover, 1)})-${layer.count}(${n(layer.barDiameter, 1)})}{${layer.count - 1}}=${n(layer.uniformSpreadClearSpacing, 2)}\\text{ mm}`,
+    ).join(";\\quad ");
+    const compressionMinimumSpacing = minimumCompressionSpacing(normalized);
+    steps.push({
+      label: "Compression-bar horizontal clear spacing",
+      formula: "s'_{clear,min}=\\max\\left(25,d'_b,\\dfrac{4d_{agg}}{3}\\right);\\quad s'_{clear}=\\dfrac{b-2d_{st}-2C_c-n'd'_b}{n'-1}",
+      substitution: `s'_{clear,min}=\\max\\left(25,${n(normalized.compressionBarDiameter, 1)},\\dfrac{4(${n(normalized.aggregateSize, 1)})}{3}\\right)=${n(compressionMinimumSpacing, 2)}\\text{ mm};\\quad ${compressionSpacing}`,
+      result: `Every adopted compression-bar layer ${result.compressionSpacingOk ? "meets" : "does not meet"} the required horizontal clear spacing (${result.compressionSpacingOk ? "PASS" : "FAIL"}).`,
+      reference: referenceSpacing,
+      status: result.compressionSpacingOk ? "pass" : "fail",
+    });
+  }
+
   steps.push({
-    label: "Vertical layer spacing and final design",
-    formula: "s_{vertical,clear}\ge25\text{ mm};\qquad A_i=n_iA_{bar};\qquad \bar y_s=\dfrac{\sum A_i y_i}{\sum A_i}",
-    substitution: result.tensionLayers.length > 1
-      ? result.tensionLayers.slice(0, -1).map((layer) => `s_{v,${layer.index}-${layer.index + 1}}=${n(layer.verticalClearSpacingToNext, 1)}\text{ mm}`).join(";\quad ")
-      : "\text{One tension layer; no vertical layer-spacing check is required}",
-    result: result.ok
-      ? `Design complete: ${result.barsRequired} bottom bars and ${result.compressionBarsRequired} top compression bars. The selected layers satisfy the design and detailing checks.`
-      : result.message,
-    explanation: "Use Beam Capacity Check for the separate provided-section strain, stress, neutral-axis, and moment-capacity analysis.",
+    label: "Vertical layer clear spacing",
+    formula: "s_{vertical,clear}\\ge25\\text{ mm};\\qquad A_i=n_iA_{bar};\\qquad \\bar y_s=\\dfrac{\\sum A_i y_i}{\\sum A_i}",
+    substitution: [
+      result.tensionLayers.length > 1
+        ? result.tensionLayers.slice(0, -1).map((layer) => `s_{v,${layer.index}-${layer.index + 1}}=${n(layer.verticalClearSpacingToNext, 1)}\\text{ mm}`).join(";\\quad ")
+        : "\\text{One tension layer; no tension vertical-spacing check is required}",
+      result.compressionLayers.length > 1
+        ? result.compressionLayers.slice(0, -1).map((layer) => `s'_{v,${layer.index}-${layer.index + 1}}=${n(layer.verticalClearSpacingToNext, 1)}\\text{ mm}`).join(";\\quad ")
+        : result.compressionLayers.length === 1
+          ? "\\text{One compression layer; no compression vertical-spacing check is required}"
+          : "\\text{No compression layers}",
+    ].join(";\\quad "),
+    result: `The adopted reinforcement ${result.verticalSpacingOk ? "meets" : "does not meet"} the required vertical clear spacing (${result.verticalSpacingOk ? "PASS" : "FAIL"}).`,
     reference: referenceSpacing,
+    status: result.verticalSpacingOk ? "pass" : "fail",
+  });
+
+  const providedLayers = [
+    ...result.tensionLayers.map((layer) => ({ ...layer, symbol: `T_${layer.index}` })),
+    ...result.compressionLayers.map((layer) => ({ ...layer, symbol: `C_${layer.index}` })),
+  ];
+  steps.push({
+    label: "Final neutral axis and Whitney block",
+    formula: "a=\\beta_1c",
+    substitution: `a=(${n(result.beta1, 3)})(${n(result.c, 3)})=${n(result.a, 3)}\\text{ mm}`,
+    result: "The final neutral axis is obtained by force-equilibrium iteration using the actual adopted bar areas and depths.",
+    resultMath: `c=${n(result.c, 3)}\\text{ mm};\\quad a=${n(result.a, 3)}\\text{ mm}`,
+    reference: referenceStrength,
+  });
+
+  steps.push({
+    label: "Final strain and stress in every reinforcement layer",
+    formula: "\\varepsilon_i=0.003\\times\\dfrac{c-y_i}{c};\\qquad f_i=\\operatorname{clip}(E_s\\varepsilon_i,-f_y,f_y)",
+    substitution: providedLayers.length
+      ? providedLayers.map((layer) =>
+        `${layer.symbol}:\\ y_i=${n(layer.yFromCompressionFace, 2)}\\text{ mm},\\ \\varepsilon_i=0.003\\times\\dfrac{${n(result.c, 3)}-${n(layer.yFromCompressionFace, 2)}}{${n(result.c, 3)}}=${n(layer.strain, 6)},\\ f_i=${n(layer.stress, 2)}\\text{ MPa}`,
+      ).join(";\\quad ")
+      : "\\text{No adopted reinforcement layers are available}",
+    result: "Positive stress denotes compression and negative stress denotes tension. Each stress is limited to ±fy.",
+    resultMath: `\\varepsilon_t=${n(result.epsilonT, 6)};\\quad \\varepsilon_y=\\dfrac{${n(normalized.fy, 1)}}{${n(normalized.Es, 0)}}=${n(result.epsilonY, 6)}`,
+    reference: referenceStrength,
+  });
+
+  steps.push({
+    label: "Final force in every reinforcement layer",
+    formula: "F_i=A_i(f_i-f_{c,disp,i});\\qquad f_{c,disp,i}=0.85f'_c I(y_i\\le a)",
+    substitution: providedLayers.length
+      ? providedLayers.map((layer) => {
+        const displacedConcreteStress = result.a !== null && layer.yFromCompressionFace <= result.a
+          ? 0.85 * normalized.fc
+          : 0;
+        return `${layer.symbol}:\ F_i=(${n(layer.area, 2)})[${n(layer.stress, 2)}-${n(displacedConcreteStress, 2)}]=${n(layer.netForce, 2)}\\text{ N}`;
+      }).join(";\\quad ")
+      : "\\text{No adopted reinforcement layers are available}",
+    result: "Steel inside the Whitney block uses net steel force, so the displaced concrete stress is subtracted.",
+    reference: referenceStrength,
+  });
+
+  steps.push({
+    label: "Final concrete force and force equilibrium",
+    formula: "C_c=0.85f'_cba;\\qquad \\sum F=C_c+\\sum F_i=0",
+    substitution: `C_c=0.85(${n(normalized.fc, 1)})(${n(normalized.b, 1)})(${n(result.a, 3)})=${n(result.concreteForce, 2)}\\text{ N};\\quad \\sum F=${n(result.forceResidual, 4)}\\text{ N}`,
+    result: `The final section ${result.equilibriumOk ? "satisfies" : "does not satisfy"} force equilibrium (${result.equilibriumOk ? "PASS" : "FAIL"}).`,
+    resultMath: `T=${n(result.tensionForce, 2)}\\text{ N};\\quad C_s=${n(result.compressionSteelForce, 2)}\\text{ N};\\quad \\left|\\sum F\\right|=${n(Math.abs(result.forceResidual ?? Number.NaN), 4)}\\text{ N}`,
+    reference: referenceStrength,
+    status: result.equilibriumOk ? "pass" : "fail",
+  });
+
+  steps.push({
+    label: "Final nominal moment of the provided section",
+    formula: "M_n=\\dfrac{\\sum(T_i y_i)-C_c\\left(\\dfrac{a}{2}\\right)-\\sum(C_{s,i}y_i)}{10^6}",
+    substitution: `M_n=\\dfrac{${n(result.tensionMoment, 2)}-${n(result.concreteMoment, 2)}-${n(result.compressionSteelMoment, 2)}}{10^6}=${n(result.Mn, 3)}\\text{ kN m}`,
+    result: "Moments are summed about the extreme compression face using the final equilibrium forces.",
+    resultMath: `M_n=${n(result.Mn, 3)}\\text{ kN m}`,
+    reference: referenceStrength,
+  });
+
+  steps.push({
+    label: "Final strength-reduction factor",
+    formula: "\\phi=0.65\ (\\varepsilon_t\\le\\varepsilon_y);\\quad \\phi=0.65+\\dfrac{\\varepsilon_t-\\varepsilon_y}{0.005-\\varepsilon_y}(0.25)\ (\\varepsilon_y<\\varepsilon_t<0.005);\\quad \\phi=0.90\ (\\varepsilon_t\\ge0.005)",
+    substitution: `\\varepsilon_t=${n(result.epsilonT, 6)};\\quad \\varepsilon_y=${n(result.epsilonY, 6)};\\quad \\phi=${n(result.phi, 4)}`,
+    result: "The final φ is recalculated from the extreme tension-steel strain of the adopted section.",
+    resultMath: `\\phi=${n(result.phi, 4)}`,
+    reference: "NSCP 2015 Table 421.2.2 / ACI 318-14 Table 21.2.2.",
+  });
+
+  steps.push({
+    label: "Final design strength and complete check",
+    formula: "\\phi M_n\\ge M_u",
+    substitution: `\\phi M_n=(${n(result.phi, 4)})(${n(result.Mn, 3)})=${n(result.phiMn, 3)}\\text{ kN m};\\quad M_u=${n(normalized.Mu, 3)}\\text{ kN m}`,
+    result: result.ok
+      ? `Design complete: adopt ${result.barsRequired} bottom bars (${result.tensionBarsPerLayer.join(" + ")} by layer)` + (result.compressionBarsRequired > 0 ? ` and ${result.compressionBarsRequired} top bars (${result.compressionBarsPerLayer.join(" + ")} by layer). All design and detailing checks pass.` : ". All design and detailing checks pass.")
+      : result.message,
+    resultMath: `\\phi M_n=${n(result.phiMn, 3)}\\text{ kN m}\ ${result.strengthOk ? "\\ge" : "<"}\ M_u=${n(normalized.Mu, 3)}\\text{ kN m}`,
+    explanation: `Strength: ${result.strengthOk ? "PASS" : "FAIL"}; strain: ${result.strainOk ? "PASS" : "FAIL"}; equilibrium: ${result.equilibriumOk ? "PASS" : "FAIL"}; geometry: ${result.geometryOk ? "PASS" : "FAIL"}; spacing: ${result.spacingOk && result.compressionSpacingOk !== false && result.verticalSpacingOk ? "PASS" : "FAIL"}; minimum steel: ${result.minimumSteelOk ? "PASS" : "FAIL"}; reinforcement ratio: ${result.rhoLimitOk && result.requiredRhoLimitOk ? "PASS" : "FAIL"}.`,
+    reference: "NSCP 2015 Sections 409.3.3.1, 409.6.1.2, 418.6.3.1, 421.2.2, 422.2, and 425.2.",
     status: result.ok ? "pass" : "fail",
   });
 

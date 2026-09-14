@@ -1,5 +1,5 @@
-import { UnitsConversion } from "@/components/module-1/units-conversion/UnitsConversion";
+import { permanentRedirect } from "next/navigation";
 
 export default function Page() {
-  return <UnitsConversion />;
+  permanentRedirect("/modules/introduction-to-rc-design/course-details");
 }

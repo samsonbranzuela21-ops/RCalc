@@ -1,16 +1,21 @@
-import { DiagramFrame, diagramSvgClass } from "@/components/shared/DiagramFrame";
+import {
+  DiagramFrame,
+  DiagramLegend,
+  DiagramSurface,
+  diagramSvgClass,
+} from "@/components/shared/DiagramFrame";
 import type {
   BendingDirection,
-  CrackingSectionMode,
+  RectangularCrackingSectionMode,
   ReinforcementMode,
-} from "@/lib/cracking-moment";
+} from "@/lib/rectangular-cracking-moment";
 
-interface CrackingMomentDiagramProps {
+interface RectangularCrackingMomentDiagramProps {
   b?: number;
   h?: number;
   fr: number;
 
-  mode: CrackingSectionMode;
+  mode: RectangularCrackingSectionMode;
   direction: BendingDirection;
   reinforcementMode: ReinforcementMode;
 
@@ -19,7 +24,7 @@ interface CrackingMomentDiagramProps {
   compressionSteelY: number | null;
 }
 
-export function CrackingMomentDiagram({
+export function RectangularCrackingMomentDiagram({
   b,
   h,
   fr,
@@ -29,7 +34,7 @@ export function CrackingMomentDiagram({
   neutralAxisFromTop,
   tensionSteelY,
   compressionSteelY,
-}: CrackingMomentDiagramProps) {
+}: RectangularCrackingMomentDiagramProps) {
   const top = 42;
   const sectionX = 55;
   const sectionW = 105;
@@ -83,7 +88,17 @@ export function CrackingMomentDiagram({
     : sectionDepth - neutralAxisFromTop;
 
   return (
-    <DiagramFrame>
+    <DiagramFrame
+      title="Beam cross-section and cracking stress"
+      legend={
+        <>
+          <DiagramLegend color="#4d7cff" label="Compression" />
+          <DiagramLegend color="#e05a5a" label="Tension" />
+          <DiagramLegend color="#f5941f" label="Tension region" />
+          <DiagramLegend color="var(--text-muted)" label="Neutral axis" dashed />
+        </>
+      }
+    >
       <svg
         viewBox="0 0 720 430"
         className={diagramSvgClass}
@@ -133,15 +148,7 @@ export function CrackingMomentDiagram({
           </pattern>
         </defs>
 
-        <rect
-          x="28"
-          y="28"
-          width="664"
-          height="348"
-          rx="6"
-          fill="var(--bg)"
-          stroke="var(--border)"
-        />
+        <DiagramSurface width={720} height={430} />
 
         <g transform="translate(160 40)">
           {/* Width dimension */}
@@ -444,12 +451,6 @@ export function CrackingMomentDiagram({
         </text>
       </svg>
 
-      <div className="flex flex-wrap justify-center gap-4 pt-2 text-[10px] text-[var(--text-muted)]">
-        <Legend color="#4d7cff" label="Compression" />
-        <Legend color="#e05a5a" label="Tension" />
-        <Legend color="#f5941f" label="Tension region" />
-        <Legend color="var(--text-muted)" label="Neutral axis" dashed />
-      </div>
     </DiagramFrame>
   );
 }
@@ -489,22 +490,3 @@ function SteelLayer({
   );
 }
 
-function Legend({
-  color,
-  label,
-  dashed = false,
-}: {
-  color: string;
-  label: string;
-  dashed?: boolean;
-}) {
-  return (
-    <span className="flex items-center gap-1.5">
-      <span
-        className="h-0 w-6 border-t-2"
-        style={{ borderColor: color, borderStyle: dashed ? "dashed" : "solid" }}
-      />
-      {label}
-    </span>
-  );
-}

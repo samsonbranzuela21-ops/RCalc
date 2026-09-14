@@ -2,20 +2,20 @@
 
 import { useState } from "react";
 import { InlineKatex } from "@/components/shared/Katex";
-import { CrackingMomentDiagram } from "@/components/calculators/flexural-design/cracking-moment/CrackingMomentDiagram";
+import { RectangularCrackingMomentDiagram } from "@/components/calculators/flexural-design/rectangular-cracking-moment/RectangularCrackingMomentDiagram";
 import {
-  calculateCrackingMoment,
-  getCrackingMomentSteps,
+  calculateRectangularCrackingMoment,
+  getRectangularCrackingMomentSteps,
   type BendingDirection,
-  type CrackingMomentResult,
-  type CrackingMomentStep,
-  type CrackingSectionMode,
+  type RectangularCrackingMomentResult,
+  type RectangularCrackingMomentStep,
+  type RectangularCrackingSectionMode,
   type ReinforcementMode,
-} from "@/lib/cracking-moment";
+} from "@/lib/rectangular-cracking-moment";
 
-export default function CrackingMomentPage() {
+export default function RectangularCrackingMomentPage() {
   const [mode, setMode] =
-    useState<CrackingSectionMode>("rectangle");
+    useState<RectangularCrackingSectionMode>("rectangle");
   const [direction, setDirection] =
     useState<BendingDirection>("positive");
   const [reinforcementMode, setReinforcementMode] =
@@ -38,9 +38,9 @@ export default function CrackingMomentPage() {
   const [yt, setYt] = useState("250");
 
   const [result, setResult] =
-    useState<CrackingMomentResult | null>(null);
+    useState<RectangularCrackingMomentResult | null>(null);
   const [steps, setSteps] =
-    useState<CrackingMomentStep[]>([]);
+    useState<RectangularCrackingMomentStep[]>([]);
   const [error, setError] = useState("");
   const [showSolution, setShowSolution] = useState(false);
 
@@ -83,17 +83,17 @@ export default function CrackingMomentPage() {
     } as const;
 
     try {
-      const computed = calculateCrackingMoment(input);
+      const computed = calculateRectangularCrackingMoment(input);
 
       setResult(computed);
-      setSteps(getCrackingMomentSteps(input, computed));
+      setSteps(getRectangularCrackingMomentSteps(input, computed));
       setError("");
       setShowSolution(false);
     } catch (caughtError) {
       setError(
         caughtError instanceof Error
           ? caughtError.message
-          : "Unable to calculate the cracking moment."
+          : "Unable to calculate the rectangular cracking moment."
       );
 
       setResult(null);
@@ -105,11 +105,11 @@ export default function CrackingMomentPage() {
     <div className="min-h-screen bg-[var(--bg)] px-3 py-8 text-[var(--text)] sm:px-5 sm:py-10">
       <div className="mx-auto min-w-0 max-w-6xl">
         <h1 className="text-2xl font-bold">
-          Cracking Moment
+          Rectangular Cracking Moment
         </h1>
 
         <p className="mt-1 text-[12px] leading-relaxed text-[var(--text-muted)]">
-          Calculate the cracking moment using gross or transformed
+          Calculate the rectangular-section cracking moment using gross or transformed
           section properties.
         </p>
 
@@ -119,7 +119,7 @@ export default function CrackingMomentPage() {
               label="Section-property mode"
               value={mode}
               onChange={(value) => {
-                setMode(value as CrackingSectionMode);
+                setMode(value as RectangularCrackingSectionMode);
                 clearOutput();
               }}
               options={[
@@ -307,7 +307,7 @@ export default function CrackingMomentPage() {
           onClick={handleCalculate}
           className="mt-4 w-full rounded-md bg-[#f5941f] px-4 py-2.5 text-[12px] font-semibold text-[#1a1300] hover:brightness-105 active:scale-[0.99]"
         >
-          Calculate Cracking Moment
+          Calculate Rectangular Cracking Moment
         </button>
 
         {error && (
@@ -317,34 +317,31 @@ export default function CrackingMomentPage() {
         )}
 
         {result && (
-          <div className="mt-6 rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] p-3 sm:p-4">
-            <div className="mb-3 rounded-md bg-[#39c98a]/15 px-3 py-2 text-[11px] font-semibold text-[#39c98a]">
-              {result.message}
+          <section className="mt-6 rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] p-4 sm:p-5" aria-label="Rectangular cracking moment visualization and results">
+            <h2 className="text-base font-semibold">Cracking moment analysis</h2>
+            <p className="mt-1 text-[10px] leading-relaxed text-[var(--text-muted)]">
+              Transformed cross-section, neutral axis, linear cracking stress, and calculated section response.
+            </p>
+
+            <div className="mt-4 grid min-w-0 items-start gap-3 xl:grid-cols-[minmax(0,1fr)_300px]">
+              <div className="min-w-0">
+                <RectangularCrackingMomentDiagram
+                  b={mode === "rectangle" ? Number(b) : undefined}
+                  h={mode === "rectangle" ? Number(h) : undefined}
+                  fr={result.fr}
+                  mode={mode}
+                  direction={direction}
+                  reinforcementMode={result.reinforcementMode}
+                  neutralAxisFromTop={result.neutralAxisFromTop}
+                  tensionSteelY={result.tensionSteelY}
+                  compressionSteelY={result.compressionSteelY}
+                />
+              </div>
+              <CrackingMomentOverview result={result} mode={mode} direction={direction} />
             </div>
 
-            <CrackingMomentDiagram
-              b={
-                mode === "rectangle"
-                  ? Number(b)
-                  : undefined
-              }
-              h={
-                mode === "rectangle"
-                  ? Number(h)
-                  : undefined
-              }
-              fr={result.fr}
-              mode={mode}
-              direction={direction}
-              reinforcementMode={result.reinforcementMode}
-              neutralAxisFromTop={
-                result.neutralAxisFromTop
-              }
-              tensionSteelY={result.tensionSteelY}
-              compressionSteelY={result.compressionSteelY}
-            />
-
-            <div className="mt-4">
+            <div className="mt-4 rounded-xl border border-[var(--border)] bg-[var(--bg)] p-3 sm:p-4">
+              <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-[#8facd9]">Complete calculated properties</p>
               <ResultRow
                 label="Bending direction"
                 value={
@@ -433,7 +430,7 @@ export default function CrackingMomentPage() {
                 bold
               />
             </div>
-          </div>
+          </section>
         )}
 
         {result && steps.length > 0 && (
@@ -494,6 +491,74 @@ export default function CrackingMomentPage() {
           applicable NSCP 2015 or ACI 318 requirements.
         </p>
       </div>
+    </div>
+  );
+}
+
+function CrackingMomentOverview({
+  result,
+  mode,
+  direction,
+}: {
+  result: RectangularCrackingMomentResult;
+  mode: RectangularCrackingSectionMode;
+  direction: BendingDirection;
+}) {
+  return (
+    <aside className="space-y-3" aria-label="Cracking moment summary">
+      <section className="rounded-xl border border-[var(--border)] bg-[var(--bg)] p-3">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[#8facd9]">
+          Cracking moment
+        </p>
+        <div className="mt-3 rounded-lg border border-[#f5941f]/50 bg-[#f5941f]/10 p-3">
+          <p className="text-[11px] font-semibold text-[var(--text)]">Calculated cracking response</p>
+          <div className="mt-1 overflow-x-auto text-[#f5b35f]">
+            <InlineKatex math={`M_{cr}=${result.Mcr.toFixed(2)}\\;\\text{kN}\\cdot\\text{m}`} />
+          </div>
+          <p className="mt-2 text-[10px] leading-relaxed text-[var(--text-muted)]">{result.message}</p>
+        </div>
+      </section>
+
+      <section className="rounded-xl border border-[var(--border)] bg-[var(--bg)] p-3">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[#8facd9]">
+          Section properties
+        </p>
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          <Metric label={result.reinforcementMode === "none" ? "Gross inertia" : "Transformed inertia"} value={`${result.inertia.toExponential(3)} mm⁴`} />
+          <Metric label="Section modulus" value={`${result.sectionModulus.toExponential(3)} mm³`} />
+          <Metric label="Neutral axis" value={`${result.neutralAxisFromTop.toFixed(2)} mm`} />
+          <Metric label="Tension-face distance" value={`${result.yt.toFixed(2)} mm`} />
+        </div>
+      </section>
+
+      <section className="rounded-xl border border-[var(--border)] bg-[var(--bg)] p-3">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[#8facd9]">
+          Bending and material response
+        </p>
+        <div className="mt-3 space-y-2 text-[10px]">
+          <SummaryLine label="Direction" value={mode === "custom" ? "Defined by yt" : direction === "positive" ? "Bottom tension" : "Top tension"} />
+          <SummaryLine label="Section basis" value={result.reinforcementMode === "none" ? "Gross section" : "Transformed section"} />
+          <SummaryLine label="Modulus of rupture" value={`${result.fr.toFixed(3)} MPa`} />
+        </div>
+      </section>
+    </aside>
+  );
+}
+
+function Metric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="min-w-0 rounded-lg bg-[var(--bg-surface)] p-2.5">
+      <p className="text-[9px] leading-tight text-[#8facd9]">{label}</p>
+      <p className="mt-1 break-words text-[10px] font-semibold text-[var(--text)]">{value}</p>
+    </div>
+  );
+}
+
+function SummaryLine({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-start justify-between gap-3 border-b border-[var(--border)] pb-2 last:border-b-0 last:pb-0">
+      <span className="text-[var(--text-muted)]">{label}</span>
+      <span className="text-right font-semibold text-[var(--text)]">{value}</span>
     </div>
   );
 }

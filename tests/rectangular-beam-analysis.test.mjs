@@ -1,14 +1,14 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import katex from "katex";
-import { checkBeamCapacity, getBeamCapacitySolutionSteps } from "../lib/beam-capacity.ts";
+import { analyzeRectangularBeam, getRectangularBeamAnalysisSolutionSteps } from "../lib/rectangular-beam-analysis.ts";
 
 const area = (bars, diameter) => bars * Math.PI * diameter ** 2 / 4;
 const close = (actual, expected, tolerance = 1e-6) =>
   assert.ok(Math.abs(actual - expected) < tolerance, `${actual} != ${expected}`);
 
 test("singly reinforced elastic tension steel re-solves c from C = T", () => {
-  const result = checkBeamCapacity({
+  const result = analyzeRectangularBeam({
     b: 250, d: 430, dPrime: 0, fc: 28, fy: 420,
     As: area(4, 32), AsPrime: 0,
   });
@@ -17,14 +17,14 @@ test("singly reinforced elastic tension steel re-solves c from C = T", () => {
   close(result.c, 256.9736921570669);
   close(result.tensionStress, 403.99382455969766);
   close(result.Mn, 416.9079789421168);
-  assert.ok(getBeamCapacitySolutionSteps(
+  assert.ok(getRectangularBeamAnalysisSolutionSteps(
     { b: 250, d: 430, dPrime: 0, fc: 28, fy: 420, As: area(4, 32), AsPrime: 0 },
     result,
   ).some((step) => step.label.includes("Re-solve c from C = T")));
 });
 
 test("singly reinforced yielding example remains unchanged", () => {
-  const result = checkBeamCapacity({
+  const result = analyzeRectangularBeam({
     b: 300, d: 530, dPrime: 0, fc: 28, fy: 420,
     As: area(4, 25), AsPrime: 0,
   });
@@ -34,7 +34,7 @@ test("singly reinforced yielding example remains unchanged", () => {
   close(result.phiMn, 350.50464734795463);
 });
 
-test("beam capacity uses rho max 0.025 and shows the complete geometry workflow", () => {
+test("rectangular beam analysis uses rho max 0.025 and shows the complete geometry workflow", () => {
   const barArea = area(1, 25);
   const input = {
     b: 300, d: 510.5, dPrime: 0, fc: 28, fy: 420,
@@ -54,8 +54,8 @@ test("beam capacity uses rho max 0.025 and shows the complete geometry workflow"
       compressionBarsPerLayer: [],
     },
   };
-  const result = checkBeamCapacity(input);
-  const solution = getBeamCapacitySolutionSteps(input, result);
+  const result = analyzeRectangularBeam(input);
+  const solution = getRectangularBeamAnalysisSolutionSteps(input, result);
   const ratioStep = solution.find((step) => step.label === "Tension steel area and reinforcement ratio checks");
 
   assert.equal(result.rhoMax, 0.025);
@@ -84,7 +84,7 @@ test("two tension layers use d1 and d2 individually and report their combined de
       { area: barArea, depth: 370, barCount: 1 },
     ],
   };
-  const result = checkBeamCapacity(input);
+  const result = analyzeRectangularBeam(input);
   const concreteForce = 0.85 * input.fc * input.b * result.a;
   const layerForce = result.tensionLayers.reduce((sum, layer) => sum + layer.force, 0);
   const expectedMoment = (
@@ -98,7 +98,7 @@ test("two tension layers use d1 and d2 individually and report their combined de
   close(result.Mn, expectedMoment, 1e-9);
   assert.equal(result.tensionLayers.length, 2);
   assert.notEqual(result.tensionLayers[0].strain, result.tensionLayers[1].strain);
-  const solution = getBeamCapacitySolutionSteps(input, result);
+  const solution = getRectangularBeamAnalysisSolutionSteps(input, result);
   const depthStep = solution.find((step) => step.label === "Individual layer depths and combined effective depth");
   assert.ok(depthStep);
   assert.match(depthStep.formula, /n_iA_\{bi\}d_i/);
@@ -111,7 +111,7 @@ test("doubly reinforced equilibrium uses the calculated compression-steel stress
     b: 300, d: 450, dPrime: 60, fc: 28, fy: 420,
     As: area(5, 25), AsPrime: area(2, 16),
   };
-  const result = checkBeamCapacity(input);
+  const result = analyzeRectangularBeam(input);
   const compressionForce = 0.85 * input.fc * input.b * result.a
     + input.AsPrime * result.fsPrime;
   const tensionForce = input.As * result.tensionStress;
@@ -130,7 +130,7 @@ test("doubly reinforced module examples match the NSCP solution process", () => 
   ];
 
   for (const example of examples) {
-    const result = checkBeamCapacity({
+    const result = analyzeRectangularBeam({
       b: 250,
       d: 430,
       dPrime: 70,

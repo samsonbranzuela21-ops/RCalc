@@ -2,7 +2,7 @@
 
 import { BlockMath } from "react-katex";
 import "katex/dist/katex.min.css";
-import { catalogModules } from "@/lib/modules";
+import { catalogModules, getModuleTopicCount } from "@/lib/modules";
 
 interface TableRow {
   [key: string]: string;
@@ -1139,7 +1139,7 @@ export default function ReferencesPage() {
                         {m.index}
                       </span>
                       <span className="min-w-0 flex-1 break-words">{m.title}</span>
-                      <span className="shrink-0 pt-0.5 text-[10px] text-[var(--text-faint)]">{m.topics.length}</span>
+                      <span className="shrink-0 pt-0.5 text-[10px] text-[var(--text-faint)]">{getModuleTopicCount(m)}</span>
                     </a>
                   </li>
                 ))}

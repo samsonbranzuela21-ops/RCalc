@@ -1,4 +1,4 @@
-export type CrackingSectionMode =
+export type RectangularCrackingSectionMode =
   | "rectangle"
   | "custom";
 
@@ -12,8 +12,8 @@ export type ReinforcementMode =
   | "top"
   | "both";
 
-export interface CrackingMomentInput {
-  mode: CrackingSectionMode;
+export interface RectangularCrackingMomentInput {
+  mode: RectangularCrackingSectionMode;
   direction: BendingDirection;
   reinforcementMode: ReinforcementMode;
 
@@ -38,8 +38,8 @@ export interface CrackingMomentInput {
   yt?: number;
 }
 
-export interface CrackingMomentResult {
-  mode: CrackingSectionMode;
+export interface RectangularCrackingMomentResult {
+  mode: RectangularCrackingSectionMode;
   direction: BendingDirection;
   reinforcementMode: ReinforcementMode;
 
@@ -69,7 +69,7 @@ export interface CrackingMomentResult {
   message: string;
 }
 
-export interface CrackingMomentStep {
+export interface RectangularCrackingMomentStep {
   label: string;
   formula: string;
   substitution?: string;
@@ -120,9 +120,9 @@ function hasTopSteel(
   return mode === "top" || mode === "both";
 }
 
-export function calculateCrackingMoment(
-  input: CrackingMomentInput
-): CrackingMomentResult {
+export function calculateRectangularCrackingMoment(
+  input: RectangularCrackingMomentInput
+): RectangularCrackingMomentResult {
   const {
     mode,
     direction,
@@ -469,11 +469,11 @@ function fixed(
   return value.toFixed(digits);
 }
 
-export function getCrackingMomentSteps(
-  input: CrackingMomentInput,
-  result: CrackingMomentResult
-): CrackingMomentStep[] {
-  const steps: CrackingMomentStep[] = [
+export function getRectangularCrackingMomentSteps(
+  input: RectangularCrackingMomentInput,
+  result: RectangularCrackingMomentResult
+): RectangularCrackingMomentStep[] {
+  const steps: RectangularCrackingMomentStep[] = [
     {
       label: "Given material properties",
       formula: "f'_c,\ E_s,\ \lambda\text{ are specified inputs}",

@@ -1,5 +1,5 @@
 import { ModuleCatalogCard } from "@/components/modules/module-catalog-card";
-import { catalogModules } from "@/lib/modules";
+import { catalogModules, getModuleTopicCount } from "@/lib/modules";
 
 const moduleColors = [
   "var(--blue)",
@@ -41,9 +41,9 @@ export default function ModulesPage() {
 
         <p className="mt-8 text-center text-xs text-[var(--text-faint)]">
           {catalogModules.length} learning modules · {catalogModules.reduce(
-            (total, moduleItem) => total + moduleItem.topics.length,
+            (total, moduleItem) => total + getModuleTopicCount(moduleItem),
             0
-          )} topics available.
+          )} lesson pages available.
         </p>
       </div>
     </main>

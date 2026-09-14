@@ -1,5 +1,5 @@
-import { DesignProcess } from "@/components/module-1/design-process/DesignProcess";
+import { permanentRedirect } from "next/navigation";
 
 export default function Page() {
-  return <DesignProcess />;
+  permanentRedirect("/modules/introduction-to-rc-design/course-details");
 }

@@ -1,5 +1,3 @@
-import Link from "next/link";
-
 import { UnitConverter } from "@/components/module-1/units-conversion/UnitConverter";
 
 const unitCategories = [
@@ -83,22 +81,16 @@ const examples = [
 
 export function UnitsConversion() {
   return (
-    <main className="min-h-screen bg-[var(--bg)] px-4 py-8 text-[var(--text)] sm:px-6 sm:py-10 lg:px-8">
-      <div className="mx-auto max-w-6xl">
+    <section className="border-t border-[var(--border)] pt-8">
+      <div className="mx-auto max-w-5xl">
         <header className="grid items-center gap-8 border-b border-[var(--border)] pb-8 lg:grid-cols-[minmax(0,1fr)_minmax(320px,0.8fr)] lg:gap-12">
           <div>
-            <Link
-              href="/modules/introduction-to-rc-design/course-details"
-              className="text-xs font-semibold text-[var(--text-muted)] hover:text-[var(--blue)]"
-            >
-              &larr; Previous: Course Details
-            </Link>
-            <p className="mt-6 text-xs font-bold uppercase tracking-[0.18em] text-[var(--blue)]">
-              Module 1: Principles of Reinforced Concrete
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-[var(--blue)]">
+              Course Foundations
             </p>
-            <h1 className="mt-3 text-3xl font-extrabold tracking-tight sm:text-4xl">
-              Topic 2: Units Conversion
-            </h1>
+            <h2 className="mt-3 text-2xl font-extrabold tracking-tight sm:text-3xl">
+              Units Conversion
+            </h2>
             <p className="mt-4 max-w-2xl text-sm leading-7 text-[var(--text-muted)] sm:text-base">
               Learn how to convert common units used in reinforced concrete
               design and structural calculations.
@@ -108,7 +100,7 @@ export function UnitsConversion() {
           <UnitsHeaderIllustration />
         </header>
 
-        <div className="mx-auto mt-8 max-w-5xl space-y-8">
+        <div className="mt-6 space-y-8">
           <section className="rounded-2xl border border-[var(--blue)]/25 bg-[var(--blue)]/8 p-5 sm:p-7">
             <p className="text-xs font-bold uppercase tracking-[0.16em] text-[var(--blue)]">
               Why it matters
@@ -212,26 +204,9 @@ export function UnitsConversion() {
             </p>
           </aside>
 
-          <nav
-            aria-label="Course topic navigation"
-            className="flex flex-col gap-3 border-t border-[var(--border)] pt-6 sm:flex-row sm:items-center sm:justify-between"
-          >
-            <Link
-              href="/modules/introduction-to-rc-design/course-details"
-              className="inline-flex min-h-11 items-center justify-center rounded-lg border border-[var(--border)] bg-[var(--bg-surface)] px-4 py-2 text-sm font-bold text-[var(--text-muted)] hover:border-[var(--blue)] hover:text-[var(--blue)]"
-            >
-              &larr; Previous: Course Details
-            </Link>
-            <Link
-              href="/modules/introduction-to-rc-design/design-process"
-              className="inline-flex min-h-11 items-center justify-center rounded-lg bg-[var(--blue)] px-4 py-2 text-sm font-bold text-white hover:brightness-110"
-            >
-              Next: Design Process &rarr;
-            </Link>
-          </nav>
         </div>
       </div>
-    </main>
+    </section>
   );
 }
 

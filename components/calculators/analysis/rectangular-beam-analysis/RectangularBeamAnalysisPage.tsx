@@ -2,18 +2,18 @@
 
 import { useState, type ReactNode } from "react";
 import { InlineKatex } from "@/components/shared/Katex";
-import { StrainStressDiagram } from "@/components/calculators/analysis/beam-capacity-check/StrainStressDiagram";
+import { StrainStressDiagram } from "@/components/calculators/analysis/rectangular-beam-analysis/StrainStressDiagram";
 import {
-  checkBeamCapacity,
-  getBeamCapacitySolutionSteps,
-  type BeamCapacityResult,
-  type BeamCapacitySolutionStep,
-} from "@/lib/beam-capacity";
+  analyzeRectangularBeam,
+  getRectangularBeamAnalysisSolutionSteps,
+  type RectangularBeamAnalysisResult,
+  type RectangularBeamAnalysisSolutionStep,
+} from "@/lib/rectangular-beam-analysis";
 
 const stirrupSizes = [10, 12, 16];
 type LayerCount = 1 | 2;
 
-export interface BeamCapacityPrefill {
+export interface RectangularBeamAnalysisPrefill {
   b: number;
   h: number;
   clearCover: number;
@@ -121,7 +121,7 @@ function formatLayerSpacing(check: LayerSpacingCheck): string {
     return `${values.join("; ")} - ${check.ok ? "OK" : "NOT OK"}`;
 }
 
-export default function BeamCapacityCheckPage({ prefill }: { prefill?: BeamCapacityPrefill }) {
+export default function RectangularBeamAnalysisPage({ prefill }: { prefill?: RectangularBeamAnalysisPrefill }) {
   const initialTensionRows = prefill?.tensionRows ?? [5];
   const initialCompressionRows = prefill?.compressionRows.length ? prefill.compressionRows : [2];
   const [b, setB] = useState(String(prefill?.b ?? 300));
@@ -151,8 +151,8 @@ export default function BeamCapacityCheckPage({ prefill }: { prefill?: BeamCapac
   const [compressionLayer2Bars, setCompressionLayer2Bars] = useState(String(initialCompressionRows[1] ?? 1));
   const [compressionLayers, setCompressionLayers] = useState<LayerCount>(initialCompressionRows.length as LayerCount);
 
-  const [result, setResult] = useState<BeamCapacityResult | null>(null);
-  const [steps, setSteps] = useState<BeamCapacitySolutionStep[]>([]);
+  const [result, setResult] = useState<RectangularBeamAnalysisResult | null>(null);
+  const [steps, setSteps] = useState<RectangularBeamAnalysisSolutionStep[]>([]);
   const [showSolution, setShowSolution] = useState(false);
   const [computedDepths, setComputedDepths] = useState<{ d: number; dPrime: number; tensionLayerDepths: number[] } | null>(null);
   const [spacingCheck, setSpacingCheck] = useState<LayerSpacingCheck | null>(null);
@@ -277,9 +277,9 @@ export default function BeamCapacityCheckPage({ prefill }: { prefill?: BeamCapac
       Mu: MuVal,
     };
 
-    const computed = checkBeamCapacity(parsed);
+    const computed = analyzeRectangularBeam(parsed);
     setResult(computed);
-    setSteps(getBeamCapacitySolutionSteps(parsed, computed));
+    setSteps(getRectangularBeamAnalysisSolutionSteps(parsed, computed));
     setComputedDepths({ d: dVal, dPrime: dPrimeVal, tensionLayerDepths: tensionLayerDepthValues });
 
     const cover = depthMode === "fromH" ? parseFloat(clearCover) : 40;
@@ -318,11 +318,11 @@ export default function BeamCapacityCheckPage({ prefill }: { prefill?: BeamCapac
   return (
     <div className="min-h-screen bg-[var(--bg)] px-5 py-10 text-[var(--text)]">
       <div className="mx-auto min-w-0 max-w-6xl">
-        <h1 className="text-2xl font-bold">Beam Capacity Check</h1>
+        <h1 className="text-2xl font-bold">Rectangular Beam Analysis</h1>
         <p className="mt-1 text-[12px] text-[var(--text-muted)]">
             Analysis of an existing RC beam section - singly or doubly reinforced, NSCP 2015 / ACI 318.
         </p>
-        {prefill && <div className="mt-4 rounded-lg border border-[#4d7cff]/35 bg-[#4d7cff]/10 px-3 py-2 text-[11px] text-[var(--text)]"><span className="font-bold text-[#4d7cff]">Design transferred.</span> The section dimensions, materials, factored moment, and adopted reinforcement below came from Flexural Beam Design. Review them, then click Calculate.</div>}
+        {prefill && <div className="mt-4 rounded-lg border border-[#4d7cff]/35 bg-[#4d7cff]/10 px-3 py-2 text-[11px] text-[var(--text)]"><span className="font-bold text-[#4d7cff]">Design transferred.</span> The section dimensions, materials, factored moment, and adopted reinforcement below came from Rectangular Beam Design. Review them, then click Calculate.</div>}
 
         <div className="mt-6 rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] p-4 sm:p-5">
           <label className="flex items-center gap-2 text-[11px] font-semibold text-[var(--text)]">
@@ -630,7 +630,7 @@ export default function BeamCapacityCheckPage({ prefill }: { prefill?: BeamCapac
             </button>
 
             {showSolution && (
-              <section className="mt-3 space-y-4 rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] p-4 sm:p-5" aria-label="Full manual beam-capacity solution">
+              <section className="mt-3 space-y-4 rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] p-4 sm:p-5" aria-label="Full manual rectangular-beam-analysis solution">
                 <div>
                   <h2 className="text-base font-extrabold">Full Manual Capacity Solution</h2>
                   <p className="mt-1 text-[11px] leading-relaxed text-[var(--text-muted)]">
@@ -693,7 +693,7 @@ export default function BeamCapacityCheckPage({ prefill }: { prefill?: BeamCapac
   );
 }
 
-function CapacityOverview({ result }: { result: BeamCapacityResult }) {
+function CapacityOverview({ result }: { result: RectangularBeamAnalysisResult }) {
   const demand = result.Mu ?? 0;
   const scale = Math.max(result.Mn, result.phiMn, demand, 1);
   const barWidth = (value: number) => `${Math.max(0, Math.min(100, value / scale * 100))}%`;
@@ -726,7 +726,7 @@ function CapacityOverview({ result }: { result: BeamCapacityResult }) {
   </aside>;
 }
 
-function TopSteelResult({ result }: { result: BeamCapacityResult }) {
+function TopSteelResult({ result }: { result: RectangularBeamAnalysisResult }) {
   const state = result.compressionSteelYields
     ? "Yields in compression"
     : result.compressionSteelTensionYields
