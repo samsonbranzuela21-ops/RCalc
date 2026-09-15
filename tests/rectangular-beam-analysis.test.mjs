@@ -34,6 +34,33 @@ test("singly reinforced yielding example remains unchanged", () => {
   close(result.phiMn, 350.50464734795463);
 });
 
+test("custom steel modulus affects analysis and solution substitutions", () => {
+  const input = {
+    b: 250, d: 430, dPrime: 0, fc: 28, fy: 420, Es: 190_000,
+    As: area(4, 32), AsPrime: 0,
+  };
+  const result = analyzeRectangularBeam(input);
+  const stressCoefficient = 0.003 * input.Es;
+  const equilibriumCoefficient = 0.85 * input.fc * input.b * 0.85;
+  const expectedC = (
+    -input.As * stressCoefficient
+    + Math.sqrt((input.As * stressCoefficient) ** 2 + 4 * equilibriumCoefficient * input.As * stressCoefficient * input.d)
+  ) / (2 * equilibriumCoefficient);
+  const solution = getRectangularBeamAnalysisSolutionSteps(input, result);
+
+  close(result.c, expectedC);
+  close(result.epsilonY, input.fy / input.Es);
+  close(result.tensionStress, input.Es * result.epsilonT);
+  assert.ok(solution.find((step) => step.label === "Given data and section classification").substitution.includes("E_s=190000\\text{ MPa}"));
+  assert.equal(solution.find((step) => step.label === "Steel yield strain").substitution, "\\varepsilon_y=\\dfrac{420}{190000}");
+  assert.ok(solution.find((step) => step.label === "Re-solve c from C = T with elastic tension steel").formula.includes("570"));
+  for (const step of solution) {
+    for (const math of [step.formula, step.substitution, step.resultKind === "text" ? null : step.result].filter(Boolean)) {
+      assert.doesNotThrow(() => katex.renderToString(math, { throwOnError: true }), step.label);
+    }
+  }
+});
+
 test("rectangular beam analysis uses rho max 0.025 and shows the complete geometry workflow", () => {
   const barArea = area(1, 25);
   const input = {

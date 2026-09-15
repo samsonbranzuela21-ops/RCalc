@@ -4,6 +4,7 @@ export interface RectangularBeamAnalysisInput {
   dPrime: number;
   fc: number;
   fy: number;
+  Es?: number;
   As: number;
   AsPrime: number;
   /** Optional discrete tension layers. Depth is measured from the compression face. */
@@ -78,9 +79,8 @@ export interface RectangularBeamAnalysisSolutionStep {
   status?: "pass" | "fail" | "info";
 }
 
-const ES = 200000;
+const DEFAULT_ES = 200000;
 const CONCRETE_STRAIN = 0.003;
-const ELASTIC_STRESS_COEFFICIENT = CONCRETE_STRAIN * ES;
 const RHO_MAX = 0.025;
 
 function beta1Factor(fc: number): number {
@@ -155,6 +155,8 @@ export function analyzeRectangularBeam(
   input: RectangularBeamAnalysisInput
 ): RectangularBeamAnalysisResult {
   const { b, d: enteredD, dPrime, fc, fy, As: enteredAs, AsPrime, Mu = null } = input;
+  const Es = input.Es ?? DEFAULT_ES;
+  const elasticStressCoefficient = CONCRETE_STRAIN * Es;
   const suppliedLayers = (input.tensionLayers ?? []).filter(
     (layer) => Number.isFinite(layer.area) && layer.area > 0 && Number.isFinite(layer.depth) && layer.depth > 0,
   );
@@ -167,7 +169,7 @@ export function analyzeRectangularBeam(
   const hasMultipleTensionLayers = tensionLayerInput.length > 1;
 
   const beta1 = beta1Factor(fc);
-  const epsilonY = fy / ES;
+  const epsilonY = fy / Es;
   const isDoublyReinforced = AsPrime > 0;
 
   const rho = As / (b * d);
@@ -187,10 +189,10 @@ export function analyzeRectangularBeam(
     const equilibriumResidual = (candidateC: number) => {
       const concreteCompression = 0.85 * fc * b * beta1 * candidateC;
       const compressionSteelStress = isDoublyReinforced
-        ? clamp((ELASTIC_STRESS_COEFFICIENT * (candidateC - dPrime)) / candidateC, -fy, fy)
+        ? clamp((elasticStressCoefficient * (candidateC - dPrime)) / candidateC, -fy, fy)
         : 0;
       const tensionSteelForce = tensionLayerInput.reduce((sum, layer) => {
-        const stress = clamp((ELASTIC_STRESS_COEFFICIENT * (layer.depth - candidateC)) / candidateC, -fy, fy);
+        const stress = clamp((elasticStressCoefficient * (layer.depth - candidateC)) / candidateC, -fy, fy);
         return sum + layer.area * stress;
       }, 0);
       return concreteCompression + AsPrime * compressionSteelStress - tensionSteelForce;
@@ -199,7 +201,7 @@ export function analyzeRectangularBeam(
     a = beta1 * c;
     if (isDoublyReinforced) {
       epsilonSPrime = (CONCRETE_STRAIN * (c - dPrime)) / c;
-      fsPrime = clamp(ES * epsilonSPrime, -fy, fy);
+      fsPrime = clamp(Es * epsilonSPrime, -fy, fy);
       compressionSteelInTension = fsPrime < 0;
       compressionSteelYields = fsPrime >= fy - 1e-9;
       compressionSteelTensionYields = fsPrime <= -fy + 1e-9;
@@ -218,8 +220,8 @@ export function analyzeRectangularBeam(
       // As[Es(0.003)(d-c)/c] = 0.85fc'(beta1 c)b.
       const cElastic = positiveQuadraticRoot(
         0.85 * fc * b * beta1,
-        As * ELASTIC_STRESS_COEFFICIENT,
-        -As * ELASTIC_STRESS_COEFFICIENT * d
+        As * elasticStressCoefficient,
+        -As * elasticStressCoefficient * d
       );
 
       c = cElastic ?? cAssumed;
@@ -234,7 +236,7 @@ export function analyzeRectangularBeam(
     // Try the possible steel states from the module algorithm. The force
     // equilibrium is Cc + Cs' = T, where Cs' is the full top-steel force.
     const k = 0.85 * fc * b * beta1;
-    const s = ELASTIC_STRESS_COEFFICIENT;
+    const s = elasticStressCoefficient;
     const candidates: Array<{
       c: number;
       bottomYields: boolean;
@@ -359,7 +361,7 @@ export function analyzeRectangularBeam(
 
   const tensionLayers = tensionLayerInput.map((layer, index) => {
     const strain = (CONCRETE_STRAIN * (layer.depth - c)) / c;
-    const stress = clamp(ES * strain, -fy, fy);
+    const stress = clamp(Es * strain, -fy, fy);
     return {
       index: index + 1,
       area: layer.area,
@@ -375,8 +377,8 @@ export function analyzeRectangularBeam(
   });
   const extremeLayer = tensionLayers.reduce((deepest, layer) => layer.depth > deepest.depth ? layer : deepest);
   const epsilonT = extremeLayer.strain;
-  const tensionStress = clamp(ES * epsilonT, -fy, fy);
-  const tensionSteelYields = ES * epsilonT >= fy;
+  const tensionStress = clamp(Es * epsilonT, -fy, fy);
+  const tensionSteelYields = Es * epsilonT >= fy;
   const { phi, ductilityClass } = phiFromStrain(
     epsilonT,
     epsilonY
@@ -460,6 +462,8 @@ export function getRectangularBeamAnalysisSolutionSteps(
   r: RectangularBeamAnalysisResult
 ): RectangularBeamAnalysisSolutionStep[] {
   const { b, dPrime, fc, fy, AsPrime } = input;
+  const Es = input.Es ?? DEFAULT_ES;
+  const elasticStressCoefficient = CONCRETE_STRAIN * Es;
   const d = r.d;
   const As = r.As;
   const hasMultipleTensionLayers = r.tensionLayers.length > 1;
@@ -481,12 +485,12 @@ export function getRectangularBeamAnalysisSolutionSteps(
     assumedCIsValid && assumedEpsilonSPrime >= r.epsilonY;
   const tensionStressFormula = r.tensionSteelYields
     ? "f_s=f_y"
-    : "f_s=600(d-c)/c";
+    : `f_s=${elasticStressCoefficient}(d-c)/c`;
   const compressionStressFormula = r.compressionSteelYields
     ? "f'_s=f_y"
     : r.compressionSteelTensionYields
       ? "f'_s=-f_y"
-      : "f'_s=600(c-d')/c";
+      : `f'_s=${elasticStressCoefficient}(c-d')/c`;
   const finalTopSteelDescription = r.compressionSteelYields
     ? "top steel yields in compression"
     : r.compressionSteelTensionYields
@@ -499,15 +503,15 @@ export function getRectangularBeamAnalysisSolutionSteps(
   const steps: RectangularBeamAnalysisSolutionStep[] = [
     {
       label: "Given data and section classification",
-      formula: "b,\\ d,\\ d',\\ f'_c,\\ f_y,\\ A_s,\\ A'_s,\\ E_s=200{,}000\\text{ MPa}",
-      substitution: `b=${b}\\text{ mm},\\ d=${d}\\text{ mm},\\ d'=${dPrime}\\text{ mm},\\ f'_c=${fc}\\text{ MPa},\\ f_y=${fy}\\text{ MPa},\\ A_s=${As}\\text{ mm}^2,\\ A'_s=${AsPrime}\\text{ mm}^2`,
+      formula: "b,\\ d,\\ d',\\ f'_c,\\ f_y,\\ A_s,\\ A'_s,\\ E_s",
+      substitution: `b=${b}\\text{ mm},\\ d=${d}\\text{ mm},\\ d'=${dPrime}\\text{ mm},\\ f'_c=${fc}\\text{ MPa},\\ f_y=${fy}\\text{ MPa},\\ E_s=${Es}\\text{ MPa},\\ A_s=${As}\\text{ mm}^2,\\ A'_s=${AsPrime}\\text{ mm}^2`,
       result: r.isDoublyReinforced ? "Doubly reinforced section: top compression steel and bottom tension steel." : "Singly reinforced section: bottom tension steel only.",
       resultKind: "text",
     },
     {
       label: "Steel yield strain",
       formula: "\\varepsilon_y=\\dfrac{f_y}{E_s}",
-      substitution: `\\varepsilon_y=\\dfrac{${fy}}{200000}`,
+      substitution: `\\varepsilon_y=\\dfrac{${fy}}{${Es}}`,
       result: `\\varepsilon_y=${r.epsilonY.toFixed(6)}`,
     },
     {
@@ -622,7 +626,7 @@ export function getRectangularBeamAnalysisSolutionSteps(
     });
     steps.push({
       label: "Solve force equilibrium using each tension layer",
-      formula: "0.85f'_cb\\beta_1c+A'_sf'_s=\\sum A_{si}f_{si},\\quad f_{si}=\\operatorname{clip}\\left[600\\dfrac{d_i-c}{c},-f_y,f_y\\right]",
+      formula: `0.85f'_cb\\beta_1c+A'_sf'_s=\\sum A_{si}f_{si},\\quad f_{si}=\\operatorname{clip}\\left[${elasticStressCoefficient}\\dfrac{d_i-c}{c},-f_y,f_y\\right]`,
       substitution: `c=${r.c.toFixed(2)}\\text{ mm};\\quad ${r.tensionLayers.map((layer) => `f_{s${layer.index}}=${layer.stress.toFixed(1)}\\text{ MPa}`).join(";\\quad ")}`,
       result: r.tensionLayers.map((layer) => `Layer ${layer.index}: depth d${layer.index === 1 ? "₁" : "₂"} = ${layer.depth.toFixed(1)} mm, strain εₛ${layer.index === 1 ? "₁" : "₂"} = ${layer.strain.toFixed(6)}, stress fₛ${layer.index === 1 ? "₁" : "₂"} = ${layer.stress.toFixed(1)} MPa.`).join(" "),
       resultKind: "text",
@@ -655,8 +659,8 @@ export function getRectangularBeamAnalysisSolutionSteps(
       steps.push({
         label: "Re-solve c from C = T with elastic tension steel",
         formula:
-          "A_s f_s=0.85f'_c b\\beta_1c,\\quad f_s=E_s\\varepsilon_s=\\dfrac{600(d-c)}{c}",
-        substitution: `(${As})\\left[\\dfrac{600(${d}-c)}{c}\\right]=0.85(${fc})(${b})(${r.beta1.toFixed(3)})c`,
+          `A_s f_s=0.85f'_c b\\beta_1c,\\quad f_s=E_s\\varepsilon_s=\\dfrac{${elasticStressCoefficient}(d-c)}{c}`,
+        substitution: `(${As})\\left[\\dfrac{${elasticStressCoefficient}(${d}-c)}{c}\\right]=0.85(${fc})(${b})(${r.beta1.toFixed(3)})c`,
         result: `c = ${r.c.toFixed(1)} mm; a = ${r.a.toFixed(1)} mm; fₛ = ${r.tensionStress.toFixed(1)} MPa.`,
         resultKind: "text",
       });
@@ -704,7 +708,7 @@ export function getRectangularBeamAnalysisSolutionSteps(
     {
       label: "Tension steel yield comparison",
       formula: "f_s=E_s\\varepsilon_t\\ (|f_s|\\le f_y);\\quad |\\varepsilon_t|\\ge\\varepsilon_y\\Rightarrow\\text{yield}",
-      substitution: `E_s\\varepsilon_t=200000(${r.epsilonT.toFixed(5)})=${r.tensionStress.toFixed(1)}\\text{ MPa},\\quad f_y=${fy}\\text{ MPa}`,
+      substitution: `E_s\\varepsilon_t=${Es}(${r.epsilonT.toFixed(5)})=${r.tensionStress.toFixed(1)}\\text{ MPa},\\quad f_y=${fy}\\text{ MPa}`,
       result: `${r.tensionSteelYields ? "Tension steel yields at the bottom." : "Tension steel remains elastic at the bottom; capacity stress is limited to the calculated elastic stress."}`,
       resultKind: "text",
     },

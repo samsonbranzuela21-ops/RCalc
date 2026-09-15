@@ -218,6 +218,25 @@ test('Problem 27 checks bar counts and rechecks phi from final strain', () => {
   assert.ok(result.spacingOk && result.compressionSpacingOk && result.geometryOk);
 });
 
+test('a layered design distinguishes the area-based five-bar count from its adopted six-bar layout', () => {
+  const input = problem(520, {
+    b: 300, h: 600, cover: 40, stirrupDiameter: 10, aggregateSize: 19,
+    barDiameter: 28, compressionBarDiameter: 20,
+  });
+  const result = designSinglyReinforcedBeam(input);
+  const barStep = getDesignSolutionSteps(input, result)
+    .find(step => step.label === 'Tension-bar area, rounding, and provided area');
+
+  assert.equal(result.ok, true);
+  assert.equal(Math.ceil(result.barsBeforeRounding - 1e-10), 5);
+  assert.equal(result.barsRequired, 6);
+  assert.deepEqual(result.tensionBarsPerLayer, [4, 2]);
+  assert.ok(result.phiMn >= input.Mu);
+  assert.match(barStep.result, /estimate rounds up to 5 bars/);
+  assert.match(barStep.result, /adopted 6-bar layout/);
+  assert.match(barStep.explanation, /centroid toward the compression face and reduce d/);
+});
+
 test('an optional target tension strain derives c and changes the strain-based design trial', () => {
   const input = problem(500, {
     b: 350, fc: 21, barDiameter: 32, compressionBarDiameter: 20,

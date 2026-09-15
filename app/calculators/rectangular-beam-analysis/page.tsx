@@ -16,6 +16,7 @@ function readDesignTransfer(params: Awaited<SearchParams>): RectangularBeamAnaly
   const stirrupDiameter = positiveNumber(params.stirrup);
   const fc = positiveNumber(params.fc);
   const fy = positiveNumber(params.fy);
+  const Es = positiveNumber(params.Es) ?? 200000;
   const Mu = positiveNumber(params.mu);
   const tensionBarDiameter = positiveNumber(params.tensionDiameter);
   const compressionBarDiameter = positiveNumber(params.compressionDiameter);
@@ -36,6 +37,7 @@ function readDesignTransfer(params: Awaited<SearchParams>): RectangularBeamAnaly
     stirrupDiameter: stirrupDiameter!,
     fc: fc!,
     fy: fy!,
+    Es,
     Mu: Mu!,
     tensionBarDiameter: tensionBarDiameter!,
     tensionRows,

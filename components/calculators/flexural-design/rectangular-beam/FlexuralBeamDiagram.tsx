@@ -84,9 +84,22 @@ function DesignPart({ title, subtitle, equations }: { title: string; subtitle: s
 }
 
 function BarSchedule({ result }: { result: FlexuralBeamResult }) {
+  const areaBasedBarCount = Number.isFinite(result.barsBeforeRounding)
+    ? Math.max(1, Math.ceil(result.barsBeforeRounding - 1e-10))
+    : result.barsRequired;
+  const hasLayeredBarCountIncrease = result.ok && result.tensionBarLayers > 1 &&
+    result.barsRequired > areaBasedBarCount;
+
   return <section className="rounded-lg border border-[var(--border)] bg-[var(--bg)] p-3">
     <p className="text-[10px] font-bold uppercase tracking-wide text-[var(--text-muted)]">Adopted bar schedule</p>
     <ScheduleRow color={REBAR_BLUE} label="Bottom tension" layers={result.tensionLayers} diameter={result.input.barDiameter} area={result.asProvided} />
+    {hasLayeredBarCountIncrease && <div className="mt-2 rounded-md bg-[#f5941f]/10 px-2 py-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="rounded border border-[#f5941f]/40 bg-[var(--bg-surface)] px-2 py-1 text-[10px] font-bold text-[#f5941f]">AREA COUNT: {areaBasedBarCount} BARS</span>
+        <span className="text-[10px] font-semibold">ADOPTED: {result.barsRequired} BARS ({result.tensionBarsPerLayer.join(" + ")})</span>
+      </div>
+      <p className="mt-2 text-[10px] leading-relaxed">Multiple layers move the tension-steel centroid toward the compression face, reducing effective depth and flexural strength. The adopted layout passes the final design checks.</p>
+    </div>}
     {result.compressionBarsRequired > 0 && <ScheduleRow color={REBAR_BLUE} label="Top compression" layers={result.compressionLayers} diameter={result.input.compressionBarDiameter} area={result.compressionBarsRequired * result.compressionBarArea} />}
   </section>;
 }

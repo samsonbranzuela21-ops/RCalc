@@ -20,6 +20,7 @@ export interface RectangularBeamAnalysisPrefill {
   stirrupDiameter: number;
   fc: number;
   fy: number;
+  Es: number;
   Mu: number;
   tensionBarDiameter: number;
   tensionRows: number[];
@@ -127,6 +128,7 @@ export default function RectangularBeamAnalysisPage({ prefill }: { prefill?: Rec
   const [b, setB] = useState(String(prefill?.b ?? 300));
   const [fc, setFc] = useState(String(prefill?.fc ?? 28));
   const [fy, setFy] = useState(String(prefill?.fy ?? 420));
+  const [Es, setEs] = useState(String(prefill?.Es ?? 200000));
   const [Mu, setMu] = useState(prefill ? String(prefill.Mu) : "");
 
   const [depthMode, setDepthMode] = useState<"direct" | "fromH">(prefill ? "fromH" : "direct");
@@ -164,6 +166,7 @@ export default function RectangularBeamAnalysisPage({ prefill }: { prefill?: Rec
     const bVal = parseFloat(b);
     const fcVal = parseFloat(fc);
     const fyVal = parseFloat(fy);
+    const EsVal = parseFloat(Es);
     const MuVal = Mu.trim() === "" ? null : parseFloat(Mu);
     const tensionBarsPerLayer = tensionLayers === 2
       ? [parseInt(tensionLayer1Bars, 10), parseInt(tensionLayer2Bars, 10)]
@@ -180,11 +183,11 @@ export default function RectangularBeamAnalysisPage({ prefill }: { prefill?: Rec
       : [barDiameter];
 
     if (
-      [bVal, fcVal, fyVal, ...barDiameters].some((v) => !Number.isFinite(v) || v <= 0) ||
+      [bVal, fcVal, fyVal, EsVal, ...barDiameters].some((v) => !Number.isFinite(v) || v <= 0) ||
       [...tensionBarsPerLayer, ...compressionBarsPerLayer].some((v) => !Number.isInteger(v) || v <= 0) ||
       (MuVal !== null && (isNaN(MuVal) || MuVal <= 0))
     ) {
-      setInputError("Enter positive values. Mu may be left blank.");
+      setInputError("Enter positive values for b, f'c, fy, Es, and bar diameters. Mu may be left blank.");
       setResult(null);
       setSteps([]);
       setComputedDepths(null);
@@ -257,6 +260,7 @@ export default function RectangularBeamAnalysisPage({ prefill }: { prefill?: Rec
       dPrime: dPrimeVal,
       fc: fcVal,
       fy: fyVal,
+      Es: EsVal,
       As,
       AsPrime: As_prime,
       tensionLayers: tensionBarsPerLayer.map((count, index) => ({
@@ -339,6 +343,7 @@ export default function RectangularBeamAnalysisPage({ prefill }: { prefill?: Rec
             <Field label="b - width (mm)" value={b} onChange={setB} />
             <Field label="f′c (MPa)" value={fc} onChange={setFc} />
             <Field label="fᵧ (MPa)" value={fy} onChange={setFy} />
+            <Field label="Es - steel modulus (MPa)" value={Es} onChange={setEs} />
             <Field label="Mᵤ — applied factored moment (kN·m), optional" value={Mu} onChange={setMu} />
           </div>
 

@@ -93,10 +93,17 @@ export default function FlexuralBeamDesignPage() {
 }
 
 function DesignResult({ result }: { result: FlexuralBeamResult }) {
+  const areaBasedBarCount = Number.isFinite(result.barsBeforeRounding)
+    ? Math.max(1, Math.ceil(result.barsBeforeRounding - 1e-10))
+    : result.barsRequired;
+  const hasLayeredBarCountIncrease = result.ok && result.tensionBarLayers > 1 &&
+    result.barsRequired > areaBasedBarCount;
+
   return <section className="mt-6 rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] p-4 sm:p-5" aria-label="Flexural design result">
     <div className={`rounded-lg border px-4 py-3 ${result.ok ? "border-[#39c98a]/40 bg-[#39c98a]/10" : "border-[#e05353]/40 bg-[#e05353]/10"}`}>
       <p className={`text-xs font-bold ${result.ok ? "text-[#21875c] dark:text-[#39c98a]" : "text-[#e05353]"}`}>{result.ok ? "DESIGN COMPLETE" : "DESIGN NOT FEASIBLE"}</p>
       <p className="mt-1 text-sm font-semibold">{result.ok ? `${result.sectionType === "doubly" ? "Doubly" : "Singly"} reinforced beam: use ${barSchedule(result.tensionBarsPerLayer, result.input.barDiameter)} at the bottom${result.compressionBarsRequired > 0 ? ` and ${barSchedule(result.compressionBarsPerLayer, result.input.compressionBarDiameter)} at the top` : ""}.` : result.message}</p>
+      {hasLayeredBarCountIncrease && <p className="mt-2 text-xs leading-relaxed">The area-based estimate rounds to {areaBasedBarCount} tension bars. Multiple layers move the tension-steel centroid toward the compression face, reducing effective depth and flexural strength. Use the adopted {result.barsRequired}-bar layout, which passes the final design checks.</p>}
     </div>
     {!result.ok && <FailureExplanation result={result} />}
     <div className="mt-4"><FlexuralBeamDiagram result={result} /></div>
@@ -211,6 +218,7 @@ function rectangularBeamAnalysisHref(result: FlexuralBeamResult): string {
     stirrup: String(result.input.stirrupDiameter),
     fc: String(result.input.fc),
     fy: String(result.input.fy),
+    Es: String(result.input.Es),
     mu: String(result.input.Mu),
     tensionDiameter: String(result.input.barDiameter),
     tensionRows: result.tensionBarsPerLayer.join(","),

@@ -28,7 +28,7 @@ export const calculators: CalculatorSection[] = [
     color: "slate",
     items: [
       { name: "Rectangular Beam Analysis", description: "Verify the capacity of an existing rectangular beam", icon: "✓", color: "slate", href: "/calculators/rectangular-beam-analysis" },
-      { name: "Cracking Moment", description: "Compute Mcr using the modulus of rupture", icon: "Mcr", color: "slate", href: "/calculators/rectangular-cracking-moment" },
+      { name: "Cracking Moment", description: "Compute Mcr for rectangular, T-, and L-beams", icon: "Mcr", color: "slate", href: "/calculators/cracking-moment" },
     ],
   },
   {

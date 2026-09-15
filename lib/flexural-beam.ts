@@ -1670,6 +1670,8 @@ export function getDesignSolutionSteps(
   const minimumTensionBarCount = Number.isFinite(result.barsBeforeRounding)
     ? Math.max(1, Math.ceil(result.barsBeforeRounding - 1e-10))
     : result.barsRequired;
+  const layeredTensionBarCountIncrease = result.ok && result.tensionBarLayers > 1 &&
+    result.barsRequired > minimumTensionBarCount;
   const minimumCompressionBarCount = Number.isFinite(result.compressionBarsBeforeRounding)
     ? Math.max(1, Math.ceil(result.compressionBarsBeforeRounding - 1e-10))
     : result.compressionBarsRequired;
@@ -1904,9 +1906,14 @@ export function getDesignSolutionSteps(
     label: "Tension-bar area, rounding, and provided area",
     formula: "A_b=\\dfrac{\\pi d_b^2}{4};\\quad n_{raw}=\\dfrac{A_{s,required}}{A_b};\\quad n_{min}=\\left\\lceil n_{raw}\\right\\rceil;\\quad A_{s,provided}=n_{adopted}A_b",
     substitution: `A_b=\\dfrac{\\pi(${n(normalized.barDiameter, 1)})^2}{4}=${n(tensionAreaPerBar, 2)}\\text{ mm}^2;\\quad n_{raw}=\\dfrac{${n(result.asRequired, 2)}}{${n(tensionAreaPerBar, 2)}}=${n(result.barsBeforeRounding, 4)};\\quad n_{min}=\\left\\lceil ${n(result.barsBeforeRounding, 4)} \\right\\rceil=${minimumTensionBarCount};\\quad A_{s,provided}=(${result.barsRequired})(${n(tensionAreaPerBar, 2)})=${n(tensionProvidedArea, 2)}\\text{ mm}^2`,
-    result: result.barsRequired > minimumTensionBarCount
-      ? `The area calculation requires at least ${minimumTensionBarCount} bars. ${result.barsRequired} bottom bars are adopted because the smaller provided-bar layout does not pass every final design check.`
-      : `Adopt ${result.barsRequired} bottom bars arranged ${result.tensionBarsPerLayer.join(" + ")} by layer.`,
+    result: layeredTensionBarCountIncrease
+      ? `The steel-area estimate rounds up to ${minimumTensionBarCount} bars. Multiple layers move the tension-steel centroid toward the compression face, reducing effective depth and flexural strength. The adopted ${result.barsRequired}-bar layout passes the final design checks.`
+      : result.barsRequired > minimumTensionBarCount
+        ? `The area calculation requires at least ${minimumTensionBarCount} bars. ${result.barsRequired} bottom bars are adopted because the smaller provided-bar layout does not pass every final design check.`
+        : `Adopt ${result.barsRequired} bottom bars arranged ${result.tensionBarsPerLayer.join(" + ")} by layer.`,
+    explanation: layeredTensionBarCountIncrease
+      ? `The area-based count is ${minimumTensionBarCount}. Multiple tension layers move the area-weighted centroid toward the compression face and reduce d, so keep the adopted ${result.barsRequired}-bar schedule that passes the final checks.`
+      : undefined,
     resultMath: `A_{s,provided}=${n(tensionProvidedArea, 2)}\\text{ mm}^2\ ${tensionProvidedArea + 1e-8 >= result.asRequired ? "\\ge" : "<"}\ A_{s,required}=${n(result.asRequired, 2)}\\text{ mm}^2`,
     status: result.asProvided + 1e-8 >= result.asRequired ? "pass" : "fail",
   });
