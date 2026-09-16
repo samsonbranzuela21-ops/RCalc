@@ -170,3 +170,53 @@ test("doubly reinforced module examples match the NSCP solution process", () => 
     assert.equal(result.tensionSteelYields, true);
   }
 });
+
+test("distinct tension and compression layers each contribute their own force and moment", () => {
+  const tensionLayers = [
+    { area: area(3, 25), depth: 540, barCount: 3 },
+    { area: area(2, 20), depth: 485, barCount: 2 },
+    { area: area(2, 16), depth: 441, barCount: 2 },
+  ];
+  const compressionLayers = [
+    { area: area(2, 16), depth: 60, barCount: 2 },
+    { area: area(2, 20), depth: 103, barCount: 2 },
+  ];
+  const As = tensionLayers.reduce((sum, layer) => sum + layer.area, 0);
+  const AsPrime = compressionLayers.reduce((sum, layer) => sum + layer.area, 0);
+  const d = tensionLayers.reduce((sum, layer) => sum + layer.area * layer.depth, 0) / As;
+  const dPrime = compressionLayers.reduce((sum, layer) => sum + layer.area * layer.depth, 0) / AsPrime;
+  const input = { b: 320, d, dPrime, fc: 28, fy: 420, As, AsPrime, tensionLayers, compressionLayers };
+  const result = analyzeRectangularBeam(input);
+  const concreteForce = 0.85 * input.fc * input.b * result.a;
+  const tensionForce = result.tensionLayers.reduce((sum, layer) => sum + layer.force, 0);
+  const compressionForce = result.compressionLayers.reduce((sum, layer) => sum + layer.force, 0);
+  const expectedMn = (result.tensionLayers.reduce((sum, layer) => sum + layer.force * layer.depth, 0)
+    - concreteForce * result.a / 2
+    - result.compressionLayers.reduce((sum, layer) => sum + layer.force * layer.depth, 0)) / 1e6;
+
+  close(concreteForce + compressionForce, tensionForce, 1e-5);
+  close(result.Mn, expectedMn, 1e-9);
+  assert.equal(result.tensionLayers.length, 3);
+  assert.equal(result.compressionLayers.length, 2);
+  assert.notEqual(result.compressionLayers[0].stress, result.compressionLayers[1].stress);
+  const solution = getRectangularBeamAnalysisSolutionSteps(input, result);
+  assert.ok(solution.some((step) => step.label === "Solve force equilibrium using each tension layer"));
+  for (const step of solution) {
+    for (const math of [step.formula, step.substitution, step.resultKind === "text" ? null : step.result].filter(Boolean)) {
+      assert.doesNotThrow(() => katex.renderToString(math, { throwOnError: true }), step.label);
+    }
+  }
+});
+
+test("one explicit compression layer preserves the existing doubly reinforced capacity", () => {
+  const base = { b: 250, d: 430, dPrime: 70, fc: 28, fy: 420, As: area(3, 28), AsPrime: area(2, 22) };
+  const previous = analyzeRectangularBeam(base);
+  const layered = analyzeRectangularBeam({
+    ...base,
+    tensionLayers: [{ area: base.As, depth: base.d, barCount: 3 }],
+    compressionLayers: [{ area: base.AsPrime, depth: base.dPrime, barCount: 2 }],
+  });
+  close(layered.c, previous.c, 1e-6);
+  close(layered.Mn, previous.Mn, 1e-6);
+  close(layered.phiMn, previous.phiMn, 1e-6);
+});

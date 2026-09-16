@@ -11,7 +11,8 @@ import {
 } from "@/lib/rectangular-beam-analysis";
 
 const stirrupSizes = [10, 12, 16];
-type LayerCount = 1 | 2;
+interface EditableLayer { id: number; count: string; diameter: string; depth: string }
+type LayerRole = "tension" | "compression";
 
 export interface RectangularBeamAnalysisPrefill {
   b: number;
@@ -41,68 +42,38 @@ function calculateLayerSpacing(
   width: number,
   cover: number,
   stirrupDiameter: number,
-  barDiameter: number,
-  barsPerLayer: number[],
+  layers: Array<{ count: number; diameter: number; depth: number }>,
 ): LayerSpacingCheck {
-  const largestRow = Math.max(...barsPerLayer);
-  const minRequired = Math.max(barDiameter, 25);
+  const barsPerLayer = layers.map((layer) => layer.count);
+  const minRequired = Math.max(25, ...layers.map((layer) => layer.diameter));
   const insideWidth = width - 2 * (cover + stirrupDiameter);
-  const clearSpacing =
-    largestRow > 1
-      ? (insideWidth - largestRow * barDiameter) / (largestRow - 1)
-      : null;
-  const verticalClearSpacing = barsPerLayer.length === 2 ? 25 : null;
-  const horizontalOk =
-    clearSpacing === null ? insideWidth >= barDiameter : clearSpacing >= minRequired;
+  const clearSpacings = layers.map(({ count, diameter }) => count > 1
+    ? (insideWidth - count * diameter) / (count - 1) : null);
+  const clearSpacing = Math.min(...clearSpacings.filter((value): value is number => value !== null));
+  const verticalSpacings = layers.slice(1).map((layer, index) =>
+    Math.abs(layer.depth - layers[index].depth) - (layer.diameter + layers[index].diameter) / 2);
+  const verticalClearSpacing = verticalSpacings.length ? Math.min(...verticalSpacings) : null;
+  const horizontalOk = layers.every(({ count, diameter }, index) =>
+    count > 1 ? (clearSpacings[index] ?? -Infinity) >= Math.max(25, diameter) : insideWidth >= diameter);
   const ok = horizontalOk && (verticalClearSpacing === null || verticalClearSpacing >= 25);
 
   return {
     barsPerLayer,
-    clearSpacing,
+    clearSpacing: Number.isFinite(clearSpacing) ? clearSpacing : null,
     verticalClearSpacing,
     minRequired,
     ok,
   };
 }
 
-function tensionSteelLayerDepths(
-  overallDepth: number,
-  cover: number,
-  stirrupDiameter: number,
-  barDiameter: number,
-  barsPerLayer: number[]
-): number[] {
-  const bottomRowDepth =
-    overallDepth - cover - stirrupDiameter - barDiameter / 2;
-  if (barsPerLayer.length === 1) return [bottomRowDepth];
-
-  const rowDistance = barDiameter + 25;
-  const upperRowDepth = bottomRowDepth - rowDistance;
-  return [bottomRowDepth, upperRowDepth];
-}
-
-function areaWeightedDepth(depths: number[], barsPerLayer: number[]): number {
-  const totalBars = barsPerLayer.reduce((sum, count) => sum + count, 0);
-  return depths.reduce((sum, depth, index) => sum + depth * barsPerLayer[index], 0) / totalBars;
-}
-
-function compressionSteelCentroidDepth(
-  cover: number,
-  stirrupDiameter: number,
-  barDiameter: number,
-  barsPerLayer: number[]
-): number {
-  const topRowDepth = cover + stirrupDiameter + barDiameter / 2;
-  if (barsPerLayer.length === 1) return topRowDepth;
-
-  const rowDistance = barDiameter + 25;
-  const lowerRowDepth = topRowDepth + rowDistance;
-  const totalBars = barsPerLayer[0] + barsPerLayer[1];
-  return (
-    (barsPerLayer[0] * topRowDepth +
-      barsPerLayer[1] * lowerRowDepth) /
-    totalBars
-  );
+function layerDepthsFromGeometry(layers: EditableLayer[], role: LayerRole, overallDepth: number, cover: number, stirrup: number): number[] {
+  let edge = role === "tension" ? overallDepth - cover - stirrup : cover + stirrup;
+  return layers.map((layer) => {
+    const diameter = Number(layer.diameter);
+    const depth = edge + (role === "tension" ? -diameter / 2 : diameter / 2);
+    edge = depth + (role === "tension" ? -diameter / 2 - 25 : diameter / 2 + 25);
+    return depth;
+  });
 }
 
 function formatLayerSpacing(check: LayerSpacingCheck): string {
@@ -132,26 +103,18 @@ export default function RectangularBeamAnalysisPage({ prefill }: { prefill?: Rec
   const [Mu, setMu] = useState(prefill ? String(prefill.Mu) : "");
 
   const [depthMode, setDepthMode] = useState<"direct" | "fromH">(prefill ? "fromH" : "direct");
-  const [d, setD] = useState("450");
-  const [d1, setD1] = useState("450");
-  const [d2, setD2] = useState("405");
-  const [dPrime, setDPrime] = useState("60");
   const [h, setH] = useState(String(prefill?.h ?? 500));
   const [clearCover, setClearCover] = useState(String(prefill?.clearCover ?? 40));
   const [stirrupDiameter, setStirrupDiameter] = useState(prefill?.stirrupDiameter ?? 10);
 
-  const [barDiameter, setBarDiameter] = useState(prefill?.tensionBarDiameter ?? 20);
-  const [numBars, setNumBars] = useState(String(initialTensionRows.reduce((sum, count) => sum + count, 0)));
-  const [tensionLayer1Bars, setTensionLayer1Bars] = useState(String(initialTensionRows[0] ?? 3));
-  const [tensionLayer2Bars, setTensionLayer2Bars] = useState(String(initialTensionRows[1] ?? 2));
-  const [tensionLayers, setTensionLayers] = useState<LayerCount>(initialTensionRows.length as LayerCount);
-
   const [isDoubly, setIsDoubly] = useState(prefill?.isDoubly ?? false);
-  const [barDiameterPrime, setBarDiameterPrime] = useState(prefill?.compressionBarDiameter ?? 16);
-  const [numBarsPrime, setNumBarsPrime] = useState(String(initialCompressionRows.reduce((sum, count) => sum + count, 0)));
-  const [compressionLayer1Bars, setCompressionLayer1Bars] = useState(String(initialCompressionRows[0] ?? 1));
-  const [compressionLayer2Bars, setCompressionLayer2Bars] = useState(String(initialCompressionRows[1] ?? 1));
-  const [compressionLayers, setCompressionLayers] = useState<LayerCount>(initialCompressionRows.length as LayerCount);
+  const [nextLayerId, setNextLayerId] = useState(10);
+  const [tensionLayers, setTensionLayers] = useState<EditableLayer[]>(initialTensionRows.map((count, index) => ({
+    id: index + 1, count: String(count), diameter: String(prefill?.tensionBarDiameter ?? 20), depth: String(450 - index * 45),
+  })));
+  const [compressionLayers, setCompressionLayers] = useState<EditableLayer[]>(initialCompressionRows.map((count, index) => ({
+    id: index + 5, count: String(count), diameter: String(prefill?.compressionBarDiameter ?? 16), depth: String(60 + index * 41),
+  })));
 
   const [result, setResult] = useState<RectangularBeamAnalysisResult | null>(null);
   const [steps, setSteps] = useState<RectangularBeamAnalysisSolutionStep[]>([]);
@@ -159,8 +122,31 @@ export default function RectangularBeamAnalysisPage({ prefill }: { prefill?: Rec
   const [computedDepths, setComputedDepths] = useState<{ d: number; dPrime: number; tensionLayerDepths: number[] } | null>(null);
   const [spacingCheck, setSpacingCheck] = useState<LayerSpacingCheck | null>(null);
   const [compressionSpacingCheck, setCompressionSpacingCheck] = useState<LayerSpacingCheck | null>(null);
-  const [calculatedBarLayers, setCalculatedBarLayers] = useState<{ tension: number[]; compression: number[] } | null>(null);
+  const [calculatedBarLayers, setCalculatedBarLayers] = useState<{ tension: Array<{ count: number; diameter: number }>; compression: Array<{ count: number; diameter: number }> } | null>(null);
   const [inputError, setInputError] = useState("");
+
+  function updateLayer(role: LayerRole, id: number, key: "count" | "diameter" | "depth", value: string) {
+    const setter = role === "tension" ? setTensionLayers : setCompressionLayers;
+    setter((layers) => layers.map((layer) => layer.id === id ? { ...layer, [key]: value } : layer));
+    setResult(null);
+  }
+
+  function addLayer(role: LayerRole) {
+    const layers = role === "tension" ? tensionLayers : compressionLayers;
+    const previous = layers.at(-1);
+    const newLayer = { id: nextLayerId, count: "2", diameter: previous?.diameter ?? "20",
+      depth: String(Number(previous?.depth ?? (role === "tension" ? 450 : 60)) + (role === "tension" ? -45 : 45)) };
+    if (role === "tension") setTensionLayers((current) => [...current, newLayer]);
+    else setCompressionLayers((current) => [...current, newLayer]);
+    setNextLayerId((id) => id + 1);
+    setResult(null);
+  }
+
+  function removeLayer(role: LayerRole, id: number) {
+    const setter = role === "tension" ? setTensionLayers : setCompressionLayers;
+    setter((layers) => layers.filter((layer) => layer.id !== id));
+    setResult(null);
+  }
 
   function handleCalculate() {
     const bVal = parseFloat(b);
@@ -168,89 +154,54 @@ export default function RectangularBeamAnalysisPage({ prefill }: { prefill?: Rec
     const fyVal = parseFloat(fy);
     const EsVal = parseFloat(Es);
     const MuVal = Mu.trim() === "" ? null : parseFloat(Mu);
-    const tensionBarsPerLayer = tensionLayers === 2
-      ? [parseInt(tensionLayer1Bars, 10), parseInt(tensionLayer2Bars, 10)]
-      : [parseInt(numBars, 10)];
-    const nBars = tensionBarsPerLayer.reduce((sum, count) => sum + count, 0);
-    const compressionBarsPerLayer = isDoubly
-      ? compressionLayers === 2
-        ? [parseInt(compressionLayer1Bars, 10), parseInt(compressionLayer2Bars, 10)]
-        : [parseInt(numBarsPrime, 10)]
-      : [];
-    const nBarsPrime = compressionBarsPerLayer.reduce((sum, count) => sum + count, 0);
-    const barDiameters = isDoubly
-      ? [barDiameter, barDiameterPrime]
-      : [barDiameter];
+    const activeCompressionLayers = isDoubly ? compressionLayers : [];
+    const allLayers = [...tensionLayers, ...activeCompressionLayers];
+    const barCounts = allLayers.map((layer) => Number(layer.count));
+    const barDiameters = allLayers.map((layer) => Number(layer.diameter));
 
     if (
+      tensionLayers.length === 0 || (isDoubly && compressionLayers.length === 0) ||
       [bVal, fcVal, fyVal, EsVal, ...barDiameters].some((v) => !Number.isFinite(v) || v <= 0) ||
-      [...tensionBarsPerLayer, ...compressionBarsPerLayer].some((v) => !Number.isInteger(v) || v <= 0) ||
+      barCounts.some((v) => !Number.isInteger(v) || v <= 0) ||
       (MuVal !== null && (isNaN(MuVal) || MuVal <= 0))
     ) {
-      setInputError("Enter positive values for b, f'c, fy, Es, and bar diameters. Mu may be left blank.");
+      setInputError("Add at least one required layer, and enter positive materials, bar counts, and diameters. Mu may be blank.");
       setResult(null);
       setSteps([]);
       setComputedDepths(null);
       return;
     }
 
-    const As = nBars * (Math.PI / 4) * barDiameter * barDiameter;
-
-    let As_prime = 0;
-    if (isDoubly) {
-      As_prime = nBarsPrime * (Math.PI / 4) * barDiameterPrime * barDiameterPrime;
+    const hVal = Number(h);
+    const ccVal = Number(clearCover);
+    if (depthMode === "fromH" && (![hVal, ccVal, stirrupDiameter].every((v) => Number.isFinite(v) && v > 0) || hVal <= 2 * (ccVal + stirrupDiameter))) {
+      setInputError("Enter a valid overall depth, cover, and stirrup diameter.");
+      setResult(null);
+      return;
+    }
+    const tensionLayerDepthValues = depthMode === "fromH"
+      ? layerDepthsFromGeometry(tensionLayers, "tension", hVal, ccVal, stirrupDiameter)
+      : tensionLayers.map((layer) => Number(layer.depth));
+    const compressionLayerDepthValues = depthMode === "fromH"
+      ? layerDepthsFromGeometry(activeCompressionLayers, "compression", hVal, ccVal, stirrupDiameter)
+      : activeCompressionLayers.map((layer) => Number(layer.depth));
+    const orderedTension = tensionLayerDepthValues.every((depth, index) => index === 0 || depth < tensionLayerDepthValues[index - 1]);
+    const orderedCompression = compressionLayerDepthValues.every((depth, index) => index === 0 || depth > compressionLayerDepthValues[index - 1]);
+    if ([...tensionLayerDepthValues, ...compressionLayerDepthValues].some((depth) => !Number.isFinite(depth) || depth <= 0 || (depthMode === "fromH" && depth >= hVal)) ||
+      !orderedTension || !orderedCompression || (isDoubly && Math.max(...compressionLayerDepthValues) >= Math.min(...tensionLayerDepthValues))) {
+      setInputError("Layer depths must fit the section: tension layers run bottom to top, compression layers top to bottom, with no overlap.");
+      setResult(null);
+      return;
     }
 
-    let dVal: number;
-    let dPrimeVal: number;
-    let tensionLayerDepthValues: number[];
-    if (depthMode === "direct") {
-      tensionLayerDepthValues = tensionLayers === 2
-        ? [parseFloat(d1), parseFloat(d2)]
-        : [parseFloat(d)];
-      dVal = areaWeightedDepth(tensionLayerDepthValues, tensionBarsPerLayer);
-      dPrimeVal = isDoubly ? parseFloat(dPrime) : 0;
-      if (tensionLayerDepthValues.some((depth) => !Number.isFinite(depth) || depth <= 0) || (tensionLayers === 2 && tensionLayerDepthValues[0] <= tensionLayerDepthValues[1]) || (isDoubly && (isNaN(dPrimeVal) || dPrimeVal <= 0 || dPrimeVal >= Math.min(...tensionLayerDepthValues)))) {
-        setInputError("Enter valid layer depths. For two tension layers, d1 must be deeper than d2.");
-        setResult(null);
-        setSteps([]);
-        setComputedDepths(null);
-        return;
-      }
-    } else {
-      const hVal = parseFloat(h);
-      const ccVal = parseFloat(clearCover);
-      if ([hVal, ccVal].some((v) => isNaN(v) || v <= 0)) {
-        setInputError("Enter valid values for h and clear cover.");
-        setResult(null);
-        setSteps([]);
-        setComputedDepths(null);
-        return;
-      }
-      tensionLayerDepthValues = tensionSteelLayerDepths(
-        hVal,
-        ccVal,
-        stirrupDiameter,
-        barDiameter,
-        tensionBarsPerLayer
-      );
-      dVal = areaWeightedDepth(tensionLayerDepthValues, tensionBarsPerLayer);
-      dPrimeVal = isDoubly
-        ? compressionSteelCentroidDepth(
-            ccVal,
-            stirrupDiameter,
-            barDiameterPrime,
-            compressionBarsPerLayer
-          )
-        : 0;
-      if (dVal <= 0 || (isDoubly && dPrimeVal >= Math.min(...tensionLayerDepthValues))) {
-        setInputError("The selected layers do not fit within the entered overall depth.");
-        setResult(null);
-        setSteps([]);
-        setComputedDepths(null);
-        return;
-      }
-    }
+    const areaOf = (layer: EditableLayer) => Number(layer.count) * Math.PI * Number(layer.diameter) ** 2 / 4;
+    const As = tensionLayers.reduce((sum, layer) => sum + areaOf(layer), 0);
+    const As_prime = activeCompressionLayers.reduce((sum, layer) => sum + areaOf(layer), 0);
+    const dVal = tensionLayers.reduce((sum, layer, index) => sum + areaOf(layer) * tensionLayerDepthValues[index], 0) / As;
+    const dPrimeVal = isDoubly ? activeCompressionLayers.reduce((sum, layer, index) => sum + areaOf(layer) * compressionLayerDepthValues[index], 0) / As_prime : 0;
+    const supportsLegacyDetailing = tensionLayers.length <= 2 && activeCompressionLayers.length <= 2 &&
+      tensionLayers.every((layer) => layer.diameter === tensionLayers[0].diameter) &&
+      activeCompressionLayers.every((layer) => layer.diameter === activeCompressionLayers[0].diameter);
 
     setInputError("");
 
@@ -263,59 +214,51 @@ export default function RectangularBeamAnalysisPage({ prefill }: { prefill?: Rec
       Es: EsVal,
       As,
       AsPrime: As_prime,
-      tensionLayers: tensionBarsPerLayer.map((count, index) => ({
-        area: count * (Math.PI / 4) * barDiameter * barDiameter,
+      tensionLayers: tensionLayers.map((layer, index) => ({
+        area: areaOf(layer),
         depth: tensionLayerDepthValues[index],
-        barCount: count,
+        barCount: Number(layer.count),
       })),
-      detailing: {
+      compressionLayers: activeCompressionLayers.map((layer, index) => ({
+        area: areaOf(layer), depth: compressionLayerDepthValues[index], barCount: Number(layer.count),
+      })),
+      detailing: supportsLegacyDetailing ? {
         depthsFromOverall: depthMode === "fromH",
         overallDepth: depthMode === "fromH" ? parseFloat(h) : 0,
         clearCover: depthMode === "fromH" ? parseFloat(clearCover) : 40,
         stirrupDiameter: depthMode === "fromH" ? stirrupDiameter : 10,
-        tensionBarDiameter: barDiameter,
-        compressionBarDiameter: barDiameterPrime,
-        tensionBarsPerLayer,
-        compressionBarsPerLayer: isDoubly ? compressionBarsPerLayer : [],
-      },
+        tensionBarDiameter: Number(tensionLayers[0].diameter),
+        compressionBarDiameter: Number(activeCompressionLayers[0]?.diameter ?? 16),
+        tensionBarsPerLayer: tensionLayers.map((layer) => Number(layer.count)),
+        compressionBarsPerLayer: activeCompressionLayers.map((layer) => Number(layer.count)),
+      } : undefined,
       Mu: MuVal,
     };
 
-    const computed = analyzeRectangularBeam(parsed);
+    let computed: RectangularBeamAnalysisResult;
+    try { computed = analyzeRectangularBeam(parsed); }
+    catch (error) { setInputError(error instanceof Error ? error.message : "Unable to analyze this section."); setResult(null); return; }
     setResult(computed);
     setSteps(getRectangularBeamAnalysisSolutionSteps(parsed, computed));
     setComputedDepths({ d: dVal, dPrime: dPrimeVal, tensionLayerDepths: tensionLayerDepthValues });
 
     const cover = depthMode === "fromH" ? parseFloat(clearCover) : 40;
     const stirrup = depthMode === "fromH" ? stirrupDiameter : 10;
-    setSpacingCheck(
-      calculateLayerSpacing(
-        bVal,
-        cover,
-        stirrup,
-        barDiameter,
-        tensionBarsPerLayer
-      )
-    );
+    setSpacingCheck(calculateLayerSpacing(bVal, cover, stirrup,
+      tensionLayers.map((layer, index) => ({ count: Number(layer.count), diameter: Number(layer.diameter), depth: tensionLayerDepthValues[index] }))));
 
     if (isDoubly) {
-      setCompressionSpacingCheck(
-        calculateLayerSpacing(
-          bVal,
-          cover,
-          stirrup,
-          barDiameterPrime,
-          compressionBarsPerLayer
-        )
-      );
+      setCompressionSpacingCheck(calculateLayerSpacing(bVal, cover, stirrup,
+        activeCompressionLayers.map((layer, index) => ({ count: Number(layer.count), diameter: Number(layer.diameter), depth: compressionLayerDepthValues[index] }))));
     } else {
       setCompressionSpacingCheck(null);
     }
-    setCalculatedBarLayers({ tension: tensionBarsPerLayer, compression: compressionBarsPerLayer });
+    setCalculatedBarLayers({ tension: tensionLayers.map((layer) => ({ count: Number(layer.count), diameter: Number(layer.diameter) })),
+      compression: activeCompressionLayers.map((layer) => ({ count: Number(layer.count), diameter: Number(layer.diameter) })) });
   }
 
-  const shownTensionLayers = calculatedBarLayers?.tension ?? [parseInt(numBars, 10)];
-  const shownCompressionLayers = calculatedBarLayers?.compression ?? (isDoubly ? [parseInt(numBarsPrime, 10)] : []);
+  const shownTensionLayers = calculatedBarLayers?.tension.map((layer) => layer.count) ?? [];
+  const shownCompressionLayers = calculatedBarLayers?.compression.map((layer) => layer.count) ?? [];
   const shownTensionBars = shownTensionLayers.reduce((sum, count) => sum + count, 0);
   const shownCompressionBars = shownCompressionLayers.reduce((sum, count) => sum + count, 0);
 
@@ -329,15 +272,11 @@ export default function RectangularBeamAnalysisPage({ prefill }: { prefill?: Rec
         {prefill && <div className="mt-4 rounded-lg border border-[#4d7cff]/35 bg-[#4d7cff]/10 px-3 py-2 text-[11px] text-[var(--text)]"><span className="font-bold text-[#4d7cff]">Design transferred.</span> The section dimensions, materials, factored moment, and adopted reinforcement below came from Rectangular Beam Design. Review them, then click Calculate.</div>}
 
         <div className="mt-6 rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] p-4 sm:p-5">
-          <label className="flex items-center gap-2 text-[11px] font-semibold text-[var(--text)]">
-            <input
-              type="checkbox"
-              checked={isDoubly}
-              onChange={(e) => setIsDoubly(e.target.checked)}
-              className="h-3.5 w-3.5"
-            />
-            Doubly reinforced (has compression steel, A′ₛ)
-          </label>
+          <label className="block text-[10px] font-medium text-[var(--text-muted)]" htmlFor="reinforcement-layout">Longitudinal reinforcement</label>
+          <select id="reinforcement-layout" value={isDoubly ? "doubly" : "singly"} onChange={(event) => { setIsDoubly(event.target.value === "doubly"); setResult(null); }} className="mt-1 w-full rounded-md border border-[var(--border)] bg-[var(--bg)] px-2 py-1.5 text-[12px] text-[var(--text)]">
+            <option value="singly">Singly reinforced</option>
+            <option value="doubly">Doubly reinforced</option>
+          </select>
 
           <div className="mt-4 grid grid-cols-2 gap-3">
             <Field label="b - width (mm)" value={b} onChange={setB} />
@@ -377,20 +316,7 @@ export default function RectangularBeamAnalysisPage({ prefill }: { prefill?: Rec
             </div>
 
             {depthMode === "direct" ? (
-              <div className="mt-3 grid grid-cols-2 gap-3">
-                {tensionLayers === 1 ? (
-                  <Field label="d - tension steel depth (mm)" value={d} onChange={setD} />
-                ) : (
-                  <>
-                    <Field label="d₁ — bottom-layer depth (mm)" value={d1} onChange={setD1} />
-                    <Field label="d₂ — upper-layer depth (mm)" value={d2} onChange={setD2} />
-                  </>
-                )}
-                {isDoubly && (
-                  <Field label="d′ — compression-steel depth (mm)" value={dPrime} onChange={setDPrime} />
-                )}
-                {tensionLayers === 2 && <p className="col-span-full text-[10px] text-[var(--text-muted)]">d₁ and d₂ are measured from the extreme compression face to their respective tension layers. The combined d is calculated from the area-weighted centroid.</p>}
-              </div>
+              <p className="mt-3 text-[10px] text-[var(--text-muted)]">Enter each bar layer depth below, measured from the top face.</p>
             ) : (
               <div className="mt-3 grid grid-cols-2 gap-3">
                 <Field label="h - overall depth (mm)" value={h} onChange={setH} />
@@ -413,57 +339,10 @@ export default function RectangularBeamAnalysisPage({ prefill }: { prefill?: Rec
             )}
           </div>
 
-          <div className="mt-5 border-t border-[var(--border)] pt-4">
-            <label className="mb-2 block text-[10px] font-medium text-[var(--text-muted)]">
-              Tension steel (bottom bars)
-            </label>
-            <div className="grid grid-cols-2 gap-3">
-              {tensionLayers === 1 ? (
-                <Field label="Number of bars" value={numBars} onChange={setNumBars} />
-              ) : (
-                <>
-                  <Field label="Layer 1 bars (bottom)" value={tensionLayer1Bars} onChange={setTensionLayer1Bars} />
-                  <Field label="Layer 2 bars (upper)" value={tensionLayer2Bars} onChange={setTensionLayer2Bars} />
-                </>
-              )}
-              <div>
-                <NumberField label="Bar diameter (mm)" value={barDiameter} onChange={setBarDiameter} />
-              </div>
-              <LayerSelect
-                label="Tension steel layers"
-                value={tensionLayers}
-                onChange={setTensionLayers}
-              />
-              {tensionLayers === 2 && <p className="col-span-full text-[10px] text-[var(--text-muted)]">Enter the bar count for each row. Layer 1 is the bottom row at d₁; Layer 2 is the upper row at d₂. The clear vertical spacing is 25 mm.</p>}
-            </div>
+          <div className="mt-5 grid items-start gap-3 border-t border-[var(--border)] pt-4 lg:grid-cols-2">
+            <LayerEditor title="Tension reinforcement layers" role="tension" layers={tensionLayers} depthMode={depthMode} onUpdate={updateLayer} onAdd={addLayer} onRemove={removeLayer} />
+            {isDoubly && <LayerEditor title="Compression reinforcement layers" role="compression" layers={compressionLayers} depthMode={depthMode} onUpdate={updateLayer} onAdd={addLayer} onRemove={removeLayer} />}
           </div>
-
-          {isDoubly && (
-            <div className="mt-5 border-t border-[var(--border)] pt-4">
-              <label className="mb-2 block text-[10px] font-medium text-[var(--text-muted)]">
-                Compression steel (top bars)
-              </label>
-              <div className="grid grid-cols-2 gap-3">
-                {compressionLayers === 1 ? (
-                  <Field label="Number of bars" value={numBarsPrime} onChange={setNumBarsPrime} />
-                ) : (
-                  <>
-                    <Field label="Layer 1 bars (top)" value={compressionLayer1Bars} onChange={setCompressionLayer1Bars} />
-                    <Field label="Layer 2 bars (lower)" value={compressionLayer2Bars} onChange={setCompressionLayer2Bars} />
-                  </>
-                )}
-                <div>
-                  <NumberField label="Bar diameter (mm)" value={barDiameterPrime} onChange={setBarDiameterPrime} />
-                </div>
-                <LayerSelect
-                  label="Compression steel layers"
-                  value={compressionLayers}
-                  onChange={setCompressionLayers}
-                />
-                {compressionLayers === 2 && <p className="col-span-full text-[10px] text-[var(--text-muted)]">Enter the compression-bar count for each row. The clear vertical spacing is 25 mm.</p>}
-              </div>
-            </div>
-          )}
         </div>
 
         {inputError && (
@@ -495,21 +374,24 @@ export default function RectangularBeamAnalysisPage({ prefill }: { prefill?: Rec
               <div className="min-w-0">
                 <StrainStressDiagram
                 b={parseFloat(b)}
-                d={computedDepths ? computedDepths.d : parseFloat(d)}
+                d={result.d}
                 c={result.c}
                 a={result.a}
                 fc={parseFloat(fc)}
                 fy={parseFloat(fy)}
-                isDoublyReinforced={isDoubly}
-                dPrime={computedDepths ? computedDepths.dPrime : parseFloat(dPrime)}
+                isDoublyReinforced={result.isDoublyReinforced}
+                dPrime={computedDepths?.dPrime}
                 compressionSteelYields={result.compressionSteelYields}
                 fsPrime={result.fsPrime}
-                As={shownTensionBars * (Math.PI / 4) * barDiameter * barDiameter}
-                AsPrime={isDoubly ? shownCompressionBars * (Math.PI / 4) * barDiameterPrime * barDiameterPrime : 0}
+                As={result.As}
+                AsPrime={result.compressionLayers.reduce((sum, layer) => sum + layer.area, 0)}
                 numBars={shownTensionBars}
                 numBarsPrime={isDoubly ? shownCompressionBars : 0}
                 tensionBarsPerLayer={shownTensionLayers}
                 tensionLayerDepths={computedDepths?.tensionLayerDepths}
+                compressionLayerDepths={result.compressionLayers.map((layer) => layer.depth)}
+                tensionLayerResults={result.tensionLayers}
+                compressionLayerResults={result.compressionLayers}
                 overallDepth={depthMode === "fromH" ? parseFloat(h) : undefined}
                 compressionBarsPerLayer={
                   isDoubly
@@ -540,7 +422,7 @@ export default function RectangularBeamAnalysisPage({ prefill }: { prefill?: Rec
                 {computedDepths.tensionLayerDepths.length > 1 && (
                   <ResultRow
                     label={<>Area-weighted combined <InlineKatex math="d" /></>}
-                    value={<InlineKatex math={`d=\\dfrac{${shownTensionLayers.map((count, index) => `${count}(${computedDepths.tensionLayerDepths[index].toFixed(1)})`).join("+")}}{${shownTensionBars}}=${computedDepths.d.toFixed(1)}\\text{ mm}`} />}
+                    value={<InlineKatex math={`d=\\dfrac{${result.tensionLayers.map((layer) => `(${layer.area.toFixed(1)})(${layer.depth.toFixed(1)})`).join("+")}}{${result.As.toFixed(1)}}=${computedDepths.d.toFixed(1)}\\text{ mm}`} />}
                   />
                 )}
                 {isDoubly && (
@@ -555,7 +437,7 @@ export default function RectangularBeamAnalysisPage({ prefill }: { prefill?: Rec
             <ResultRow label="Section type" value={result.isDoublyReinforced ? "Doubly reinforced" : "Singly reinforced"} />
             <ResultRow
               label={<><InlineKatex math="A_s" /> — tension steel</>}
-              value={<InlineKatex math={`A_s=${(shownTensionBars * (Math.PI / 4) * barDiameter * barDiameter).toFixed(0)}\\text{ mm}^2\\quad(${shownTensionBars}\\times${barDiameter}\\text{ mm})`} />}
+              value={<InlineKatex math={`A_s=${result.As.toFixed(0)}\\text{ mm}^2`} />}
             />
             <ResultRow
               label="Tension-bar arrangement"
@@ -564,7 +446,7 @@ export default function RectangularBeamAnalysisPage({ prefill }: { prefill?: Rec
             {isDoubly && (
               <ResultRow
                 label={<><InlineKatex math="A'_s" /> — compression steel</>}
-                value={<InlineKatex math={`A'_s=${(shownCompressionBars * (Math.PI / 4) * barDiameterPrime * barDiameterPrime).toFixed(0)}\\text{ mm}^2\\quad(${shownCompressionBars}\\times${barDiameterPrime}\\text{ mm})`} />}
+                value={<InlineKatex math={`A'_s=${result.compressionLayers.reduce((sum, layer) => sum + layer.area, 0).toFixed(0)}\\text{ mm}^2`} />}
               />
             )}
             {isDoubly && (
@@ -575,7 +457,10 @@ export default function RectangularBeamAnalysisPage({ prefill }: { prefill?: Rec
             )}
             <ResultRow label={<><InlineKatex math="a" /> — stress-block depth</>} value={<InlineKatex math={`a=${result.a.toFixed(1)}\\text{ mm}`} />} />
             <ResultRow label={<><InlineKatex math="c" /> — neutral-axis depth</>} value={<InlineKatex math={`c=${result.c.toFixed(1)}\\text{ mm}`} />} />
-            {result.isDoublyReinforced && (
+            {result.compressionLayers.length > 1 && result.compressionLayers.map((layer) => (
+              <ResultRow key={layer.index} label={`Compression layer ${layer.index} stress`} value={`${layer.stress.toFixed(1)} MPa at ${layer.depth.toFixed(1)} mm`} />
+            ))}
+            {result.isDoublyReinforced && result.compressionLayers.length === 1 && (
               <ResultRow
                 label="Top steel"
                 value={<TopSteelResult result={result} />}
@@ -770,29 +655,35 @@ function Field({ label, value, onChange }: { label: string; value: string; onCha
   );
 }
 
-function LayerSelect({
-  label,
-  value,
-  onChange,
-}: {
-  label: string;
-  value: LayerCount;
-  onChange: (value: LayerCount) => void;
+function LayerEditor({ title, role, layers, depthMode, onUpdate, onAdd, onRemove }: {
+  title: string;
+  role: LayerRole;
+  layers: EditableLayer[];
+  depthMode: "direct" | "fromH";
+  onUpdate: (role: LayerRole, id: number, key: "count" | "diameter" | "depth", value: string) => void;
+  onAdd: (role: LayerRole) => void;
+  onRemove: (role: LayerRole, id: number) => void;
 }) {
   return (
-    <div>
-      <label className="mb-1 block text-[10px] font-medium text-[var(--text-muted)]">
-        {label}
-      </label>
-      <select
-        value={value}
-        onChange={(event) => onChange(Number(event.target.value) as LayerCount)}
-        className="w-full rounded-md border border-[var(--border)] bg-[var(--bg)] px-2 py-1.5 text-[12px] text-[var(--text)]"
-      >
-        <option value={1}>1 layer</option>
-        <option value={2}>2 layers</option>
-      </select>
-    </div>
+    <section className="rounded-lg border border-[var(--border)] bg-[var(--bg)] p-3">
+      <div className="flex items-center justify-between gap-3">
+        <div><p className="text-[11px] font-bold">{title}</p><p className="text-[9px] text-[var(--text-muted)]">{depthMode === "direct" ? "Each centroid depth is measured from the top face." : "Layer depths are calculated from cover and 25 mm clear spacing."}</p></div>
+        <button type="button" onClick={() => onAdd(role)} className="rounded-md border border-[#f5941f]/50 px-2 py-1 text-[10px] font-bold text-[#f5941f]">+ Add layer</button>
+      </div>
+      <div className="mt-3 space-y-2">
+        {layers.map((layer, index) => (
+          <div key={layer.id} className="rounded-md border border-[var(--border)] bg-[var(--bg-surface)] p-2">
+            <div className="mb-2 flex items-center justify-between"><p className="text-[10px] font-bold">Layer {index + 1}</p><button type="button" onClick={() => onRemove(role, layer.id)} className="text-[9px] font-semibold text-[#e05353]">Remove</button></div>
+            <div className={`grid gap-2 ${depthMode === "direct" ? "grid-cols-3" : "grid-cols-2"}`}>
+              <Field label="Bars" value={layer.count} onChange={(value) => onUpdate(role, layer.id, "count", value)} />
+              <Field label="Diameter (mm)" value={layer.diameter} onChange={(value) => onUpdate(role, layer.id, "diameter", value)} />
+              {depthMode === "direct" && <Field label="Depth y (mm)" value={layer.depth} onChange={(value) => onUpdate(role, layer.id, "depth", value)} />}
+            </div>
+          </div>
+        ))}
+        {layers.length === 0 && <p className="rounded-md border border-dashed border-[var(--border)] p-3 text-center text-[10px] text-[var(--text-muted)]">Add at least one layer.</p>}
+      </div>
+    </section>
   );
 }
 
@@ -801,30 +692,6 @@ function ResultRow({ label, value, bold }: { label: ReactNode; value: ReactNode;
     <div className="flex items-start justify-between gap-4 border-b border-[var(--border)] py-1.5 text-[11px] last:border-b-0">
       <span className="min-w-0 leading-relaxed text-[var(--text-muted)]">{label}</span>
       <span className={`shrink-0 text-right leading-relaxed ${bold ? "font-bold" : ""}`}>{value}</span>
-    </div>
-  );
-}
-
-function NumberField({
-  label,
-  value,
-  onChange,
-}: {
-  label: string;
-  value: number;
-  onChange: (value: number) => void;
-}) {
-  return (
-    <div>
-      <label className="mb-1 block text-[10px] font-medium text-[var(--text-muted)]">{label}</label>
-      <input
-        type="number"
-        min="0"
-        step="any"
-        value={Number.isFinite(value) ? value : ""}
-        onChange={(event) => onChange(parseFloat(event.target.value))}
-        className="w-full rounded-md border border-[var(--border)] bg-[var(--bg)] px-2 py-1.5 text-[12px] text-[var(--text)]"
-      />
     </div>
   );
 }

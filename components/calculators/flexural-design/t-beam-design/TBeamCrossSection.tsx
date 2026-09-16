@@ -8,6 +8,10 @@ interface TBeamCrossSectionProps {
   barsRequired: number;
   barsPerLayer: number;
   sectionCase: "flange" | "web";
+  compressionBarsRequired: number;
+  compressionBarsPerLayer: number;
+  compressionBarDiameter: number;
+  dPrime: number;
 }
 
 function distributeBars(total: number, maximumPerLayer = 8): number[] {
@@ -33,6 +37,10 @@ export function TBeamCrossSection({
   barsRequired,
   barsPerLayer,
   sectionCase,
+  compressionBarsRequired,
+  compressionBarsPerLayer,
+  compressionBarDiameter,
+  dPrime,
 }: TBeamCrossSectionProps) {
   const flangeWidth = 230;
   const webWidth = Math.max(54, Math.min(100, (bw / beff) * flangeWidth));
@@ -53,7 +61,11 @@ export function TBeamCrossSection({
   );
   const compressionBottom = sectionTop + compressionDepth;
   const barLayers = distributeBars(barsRequired, barsPerLayer);
+  const compressionLayers = compressionBarsRequired > 0
+    ? distributeBars(compressionBarsRequired, compressionBarsPerLayer)
+    : [];
   const barRadius = Math.max(3.2, Math.min(5.5, barDiameter / 5));
+  const compressionRadius = Math.max(3.2, Math.min(5.5, compressionBarDiameter / 5));
 
   return (
     <div className="flex flex-col items-center overflow-x-auto rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] p-3 sm:p-4">
@@ -61,7 +73,7 @@ export function TBeamCrossSection({
         viewBox="0 0 360 340"
         className="min-w-[330px] w-full max-w-[430px]"
         role="img"
-        aria-label="T-beam cross-section with effective flange, web, compression block, and tension reinforcement"
+        aria-label="T-beam cross-section with effective flange, web, compression block, and tension and compression reinforcement"
       >
         <defs>
           <marker
@@ -239,6 +251,18 @@ export function TBeamCrossSection({
         </text>
 
         {/* Tension reinforcement; count follows the calculator result */}
+        {compressionLayers.map((count, layerIndex) => {
+          const layerDepth = dPrime + layerIndex * (compressionBarDiameter + 25);
+          const layerY = sectionTop + (layerDepth / d) * (effectiveDepthY - sectionTop);
+          const inset = compressionRadius + 3;
+          const usableWidth = Math.max(0, webWidth - 2 * inset);
+          return Array.from({ length: count }, (_, index) => {
+            const x = count === 1 ? centerX : webLeft + inset + index * usableWidth / (count - 1);
+            return <circle key={"compression-" + layerIndex + "-" + index}
+              cx={x} cy={layerY} r={compressionRadius} fill="#6db6ff"
+              stroke="var(--bg)" strokeWidth="1" />;
+          });
+        })}
         {barLayers.map((count, layerIndex) => {
           const layerY = effectiveDepthY - layerIndex * (barRadius * 2 + 7);
           const usableWidth = Math.max(8, webWidth - 18);

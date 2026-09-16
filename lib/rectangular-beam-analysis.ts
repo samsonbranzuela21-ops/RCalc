@@ -9,6 +9,8 @@ export interface RectangularBeamAnalysisInput {
   AsPrime: number;
   /** Optional discrete tension layers. Depth is measured from the compression face. */
   tensionLayers?: Array<{ area: number; depth: number; barCount?: number }>;
+  /** Optional discrete compression layers, measured from the top face. */
+  compressionLayers?: Array<{ area: number; depth: number; barCount?: number }>;
   detailing?: {
     depthsFromOverall: boolean;
     overallDepth: number;
@@ -66,6 +68,7 @@ export interface RectangularBeamAnalysisResult {
   d: number;
   dExtremeTension: number;
   tensionLayers: RectangularBeamAnalysisTensionLayerResult[];
+  compressionLayers: RectangularBeamAnalysisTensionLayerResult[];
 }
 
 export interface RectangularBeamAnalysisSolutionStep {
@@ -154,7 +157,7 @@ function phiFromStrain(
 export function analyzeRectangularBeam(
   input: RectangularBeamAnalysisInput
 ): RectangularBeamAnalysisResult {
-  const { b, d: enteredD, dPrime, fc, fy, As: enteredAs, AsPrime, Mu = null } = input;
+  const { b, d: enteredD, fc, fy, As: enteredAs, AsPrime, Mu = null } = input;
   const Es = input.Es ?? DEFAULT_ES;
   const elasticStressCoefficient = CONCRETE_STRAIN * Es;
   const suppliedLayers = (input.tensionLayers ?? []).filter(
@@ -167,10 +170,22 @@ export function analyzeRectangularBeam(
   const d = tensionLayerInput.reduce((sum, layer) => sum + layer.area * layer.depth, 0) / As;
   const dExtremeTension = Math.max(...tensionLayerInput.map((layer) => layer.depth));
   const hasMultipleTensionLayers = tensionLayerInput.length > 1;
+  if (input.compressionLayers?.some((layer) => !Number.isFinite(layer.area) || layer.area <= 0 || !Number.isFinite(layer.depth) || layer.depth <= 0 || layer.depth >= dExtremeTension)) {
+    throw new Error("Compression layers require positive areas and depths above the tension steel.");
+  }
+  const compressionLayerInput = input.compressionLayers?.length
+    ? input.compressionLayers
+    : AsPrime > 0 ? [{ area: AsPrime, depth: input.dPrime }] : [];
+  const hasMultipleCompressionLayers = compressionLayerInput.length > 1;
+  const hasExplicitCompressionLayers = Boolean(input.compressionLayers?.length);
+  const compressionArea = compressionLayerInput.reduce((sum, layer) => sum + layer.area, 0);
+  const dPrime = compressionArea > 0
+    ? compressionLayerInput.reduce((sum, layer) => sum + layer.area * layer.depth, 0) / compressionArea
+    : input.dPrime;
 
   const beta1 = beta1Factor(fc);
   const epsilonY = fy / Es;
-  const isDoublyReinforced = AsPrime > 0;
+  const isDoublyReinforced = compressionArea > 0;
 
   const rho = As / (b * d);
   const rhoMin = Math.max(1.4 / fy, Math.sqrt(fc) / (4 * fy));
@@ -185,19 +200,20 @@ export function analyzeRectangularBeam(
   let compressionSteelTensionYields: boolean | null = null;
   let epsilonSPrime: number | null = null;
 
-  if (hasMultipleTensionLayers) {
+  if (hasMultipleTensionLayers || hasExplicitCompressionLayers) {
     const equilibriumResidual = (candidateC: number) => {
       const concreteCompression = 0.85 * fc * b * beta1 * candidateC;
-      const compressionSteelStress = isDoublyReinforced
-        ? clamp((elasticStressCoefficient * (candidateC - dPrime)) / candidateC, -fy, fy)
-        : 0;
+      const compressionSteelForce = compressionLayerInput.reduce((sum, layer) =>
+        sum + layer.area * clamp((elasticStressCoefficient * (candidateC - layer.depth)) / candidateC, -fy, fy), 0);
       const tensionSteelForce = tensionLayerInput.reduce((sum, layer) => {
         const stress = clamp((elasticStressCoefficient * (layer.depth - candidateC)) / candidateC, -fy, fy);
         return sum + layer.area * stress;
       }, 0);
-      return concreteCompression + AsPrime * compressionSteelStress - tensionSteelForce;
+      return concreteCompression + compressionSteelForce - tensionSteelForce;
     };
-    c = bracketedRoot(equilibriumResidual, 1e-6, dExtremeTension * (1 - 1e-9)) ?? dExtremeTension / 2;
+    const solvedC = bracketedRoot(equilibriumResidual, 1e-6, dExtremeTension * (1 - 1e-9));
+    if (solvedC === null) throw new Error("The selected layers do not produce a valid neutral-axis equilibrium.");
+    c = solvedC;
     a = beta1 * c;
     if (isDoublyReinforced) {
       epsilonSPrime = (CONCRETE_STRAIN * (c - dPrime)) / c;
@@ -375,6 +391,19 @@ export function analyzeRectangularBeam(
         : null,
     };
   });
+  const compressionLayers = compressionLayerInput.map((layer, index) => {
+    const strain = (CONCRETE_STRAIN * (c - layer.depth)) / c;
+    const stress = clamp(Es * strain, -fy, fy);
+    return { index: index + 1, area: layer.area, depth: layer.depth, strain, stress,
+      yields: Math.abs(stress) >= fy - 1e-9, force: layer.area * stress,
+      barCount: layer.barCount ?? null };
+  });
+  if (hasMultipleCompressionLayers) {
+    fsPrime = compressionLayers.reduce((sum, layer) => sum + layer.force, 0) / compressionArea;
+    compressionSteelYields = compressionLayers.every((layer) => layer.stress >= fy - 1e-9);
+    compressionSteelTensionYields = compressionLayers.every((layer) => layer.stress <= -fy + 1e-9);
+    compressionSteelInTension = compressionLayers.some((layer) => layer.stress < 0);
+  }
   const extremeLayer = tensionLayers.reduce((deepest, layer) => layer.depth > deepest.depth ? layer : deepest);
   const epsilonT = extremeLayer.strain;
   const tensionStress = clamp(Es * epsilonT, -fy, fy);
@@ -385,12 +414,12 @@ export function analyzeRectangularBeam(
   );
 
   let MnNmm: number;
-  if (hasMultipleTensionLayers) {
+  if (hasMultipleTensionLayers || hasExplicitCompressionLayers) {
     const concreteCompression = 0.85 * fc * b * a;
-    const compressionSteelForce = isDoublyReinforced ? AsPrime * (fsPrime as number) : 0;
+    const compressionSteelMoment = compressionLayers.reduce((sum, layer) => sum + layer.force * layer.depth, 0);
     MnNmm = tensionLayers.reduce((sum, layer) => sum + layer.force * layer.depth, 0)
       - concreteCompression * a / 2
-      - compressionSteelForce * dPrime;
+      - compressionSteelMoment;
   } else if (!isDoublyReinforced) {
     MnNmm = As * tensionStress * (d - a / 2);
   } else {
@@ -454,6 +483,7 @@ export function analyzeRectangularBeam(
     d,
     dExtremeTension,
     tensionLayers,
+    compressionLayers,
   };
 }
 
@@ -461,12 +491,18 @@ export function getRectangularBeamAnalysisSolutionSteps(
   input: RectangularBeamAnalysisInput,
   r: RectangularBeamAnalysisResult
 ): RectangularBeamAnalysisSolutionStep[] {
-  const { b, dPrime, fc, fy, AsPrime } = input;
+  const { b, fc, fy } = input;
+  const AsPrime = r.compressionLayers.reduce((sum, layer) => sum + layer.area, 0);
+  const dPrime = AsPrime > 0
+    ? r.compressionLayers.reduce((sum, layer) => sum + layer.area * layer.depth, 0) / AsPrime
+    : 0;
   const Es = input.Es ?? DEFAULT_ES;
   const elasticStressCoefficient = CONCRETE_STRAIN * Es;
   const d = r.d;
   const As = r.As;
   const hasMultipleTensionLayers = r.tensionLayers.length > 1;
+  const hasMultipleCompressionLayers = r.compressionLayers.length > 1;
+  const hasDiscreteLayers = hasMultipleTensionLayers || Boolean(input.compressionLayers?.length);
   const hasLayerBarCounts = r.tensionLayers.every((layer) => layer.barCount !== null);
   const assumedA = r.isDoublyReinforced
     ? (As * fy - AsPrime * fy) / (0.85 * fc * b)
@@ -615,20 +651,20 @@ export function getRectangularBeamAnalysisSolutionSteps(
     }
   }
 
-  if (hasMultipleTensionLayers) {
+  if (hasDiscreteLayers) {
     steps.splice(detailing?.depthsFromOverall ? 2 : 1, 0, {
       label: "Individual layer depths and combined effective depth",
       formula: "A_{si}=n_iA_{bi},\\quad d=\\dfrac{\\sum n_iA_{bi}d_i}{\\sum n_iA_{bi}}",
       substitution: hasLayerBarCounts
         ? `d=\\dfrac{${r.tensionLayers.map((layer) => `(${layer.barCount})(${(layer.area / Number(layer.barCount)).toFixed(2)})(${layer.depth.toFixed(1)})`).join("+")}}{${r.tensionLayers.map((layer) => `(${layer.barCount})(${(layer.area / Number(layer.barCount)).toFixed(2)})`).join("+")}}=${r.d.toFixed(2)}\\text{ mm}`
         : `d=\\dfrac{${r.tensionLayers.map((layer) => `(${layer.area.toFixed(2)})(${layer.depth.toFixed(1)})`).join("+")}}{${r.tensionLayers.map((layer) => layer.area.toFixed(2)).join("+")}}=${r.d.toFixed(2)}\\text{ mm}`,
-      result: `${r.tensionLayers.map((layer) => `d_${layer.index}=${layer.depth.toFixed(1)}\\text{ mm}`).join(",\\quad ")},\\quad d=${r.d.toFixed(1)}\\text{ mm}`,
+      result: `${r.tensionLayers.map((layer) => `d_${layer.index}=${layer.depth.toFixed(1)}\\text{ mm}`).join(",\\quad ")},\\quad d=${r.d.toFixed(1)}\\text{ mm}` + (hasMultipleCompressionLayers ? `;\\quad ${r.compressionLayers.map((layer) => `d'_${layer.index}=${layer.depth.toFixed(1)}\\text{ mm}`).join(",\\quad ")}` : ""),
     });
     steps.push({
       label: "Solve force equilibrium using each tension layer",
-      formula: `0.85f'_cb\\beta_1c+A'_sf'_s=\\sum A_{si}f_{si},\\quad f_{si}=\\operatorname{clip}\\left[${elasticStressCoefficient}\\dfrac{d_i-c}{c},-f_y,f_y\\right]`,
-      substitution: `c=${r.c.toFixed(2)}\\text{ mm};\\quad ${r.tensionLayers.map((layer) => `f_{s${layer.index}}=${layer.stress.toFixed(1)}\\text{ MPa}`).join(";\\quad ")}`,
-      result: r.tensionLayers.map((layer) => `Layer ${layer.index}: depth d${layer.index === 1 ? "₁" : "₂"} = ${layer.depth.toFixed(1)} mm, strain εₛ${layer.index === 1 ? "₁" : "₂"} = ${layer.strain.toFixed(6)}, stress fₛ${layer.index === 1 ? "₁" : "₂"} = ${layer.stress.toFixed(1)} MPa.`).join(" "),
+      formula: `0.85f'_cb\\beta_1c+\\sum A'_{sj}f'_{sj}=\\sum A_{si}f_{si},\\quad f_{si}=\\operatorname{clip}\\left[${elasticStressCoefficient}\\dfrac{d_i-c}{c},-f_y,f_y\\right],\\quad f'_{sj}=\\operatorname{clip}\\left[${elasticStressCoefficient}\\dfrac{c-d'_j}{c},-f_y,f_y\\right]`,
+      substitution: `c=${r.c.toFixed(2)}\\text{ mm};\\quad ${r.tensionLayers.map((layer) => `f_{s${layer.index}}=${layer.stress.toFixed(1)}\\text{ MPa}`).join(";\\quad ")}` + (hasMultipleCompressionLayers ? `;\\quad ${r.compressionLayers.map((layer) => `f'_{s${layer.index}}=${layer.stress.toFixed(1)}\\text{ MPa}`).join(";\\quad ")}` : ""),
+      result: r.tensionLayers.map((layer) => `Tension layer ${layer.index}: depth ${layer.depth.toFixed(1)} mm, strain ${layer.strain.toFixed(6)}, stress ${layer.stress.toFixed(1)} MPa.`).join(" ") + (hasMultipleCompressionLayers ? " " + r.compressionLayers.map((layer) => `Compression layer ${layer.index}: depth ${layer.depth.toFixed(1)} mm, strain ${layer.strain.toFixed(6)}, stress ${layer.stress.toFixed(1)} MPa.`).join(" ") : ""),
       resultKind: "text",
     });
   } else if (!r.isDoublyReinforced) {
@@ -721,13 +757,13 @@ export function getRectangularBeamAnalysisSolutionSteps(
     },
     {
       label: "Nominal moment capacity, Mₙ",
-      formula: hasMultipleTensionLayers
-        ? "M_n=\\sum A_{si}f_{si}d_i-0.85f'_cba\\dfrac{a}{2}-A'_sf'_sd'"
+      formula: hasDiscreteLayers
+        ? "M_n=\\sum A_{si}f_{si}d_i-0.85f'_cba\\dfrac{a}{2}-\\sum A'_{sj}f'_{sj}d'_j"
         : r.isDoublyReinforced
         ? "M_n = 0.85f'_c\\,b\\,a\\left(d-\\dfrac{a}{2}\\right) + A'_s f'_s(d-d')"
         : "M_n = A_s f_s\\left(d - \\dfrac{a}{2}\\right)",
-      substitution: hasMultipleTensionLayers
-        ? `M_n=${r.tensionLayers.map((layer) => `(${layer.area.toFixed(2)})(${layer.stress.toFixed(1)})(${layer.depth.toFixed(1)})`).join("+")}-0.85(${fc})(${b})(${r.a.toFixed(1)})\\dfrac{${r.a.toFixed(1)}}{2}` + (r.isDoublyReinforced ? `-(${AsPrime})(${r.fsPrime?.toFixed(1)})(${dPrime})` : "")
+      substitution: hasDiscreteLayers
+        ? `M_n=${r.tensionLayers.map((layer) => `(${layer.area.toFixed(2)})(${layer.stress.toFixed(1)})(${layer.depth.toFixed(1)})`).join("+")}-0.85(${fc})(${b})(${r.a.toFixed(1)})\\dfrac{${r.a.toFixed(1)}}{2}` + (r.isDoublyReinforced ? `-${r.compressionLayers.map((layer) => `(${layer.area.toFixed(2)})(${layer.stress.toFixed(1)})(${layer.depth.toFixed(1)})`).join("-")}` : "")
         : r.isDoublyReinforced
         ? `M_n = 0.85(${fc})(${b})(${r.a.toFixed(1)})\\left(${d}-\\dfrac{${r.a.toFixed(1)}}{2}\\right) + (${AsPrime})(${r.fsPrime?.toFixed(1)})(${d}-${dPrime})`
         : `M_n = (${As})(${r.tensionStress.toFixed(1)})\\left(${d} - \\dfrac{${r.a.toFixed(1)}}{2}\\right)`,
@@ -735,13 +771,13 @@ export function getRectangularBeamAnalysisSolutionSteps(
     },
     {
       label: "Internal force equilibrium and moment components",
-      formula: hasMultipleTensionLayers
-        ? "C_c+C'_s=\\sum T_i,\\quad T_i=A_{si}f_{si}"
+      formula: hasDiscreteLayers
+        ? "C_c+\\sum C'_{sj}=\\sum T_i,\\quad C'_{sj}=A'_{sj}f'_{sj},\\quad T_i=A_{si}f_{si}"
         : r.isDoublyReinforced
         ? "C_c=0.85f'_cba,\\quad C'_s=A'_s f'_s,\\quad T=A_sf_s;\\quad M_n=C_c(d-a/2)+C'_s(d-d')"
         : "C_c=0.85f'_cba,\\quad T=A_sf_s,\\quad C_c=T;\\quad M_n=T(d-a/2)",
-      substitution: hasMultipleTensionLayers
-        ? `C_c=0.85(${fc})(${b})(${r.a.toFixed(1)}),\\quad ${r.isDoublyReinforced ? `C'_s=(${AsPrime})(${r.fsPrime?.toFixed(1)}),\\quad ` : ""}${r.tensionLayers.map((layer) => `T_${layer.index}=(${layer.area.toFixed(2)})(${layer.stress.toFixed(1)})`).join(",\\quad ")}`
+      substitution: hasDiscreteLayers
+        ? `C_c=0.85(${fc})(${b})(${r.a.toFixed(1)}),\\quad ${r.compressionLayers.map((layer) => `C'_{s${layer.index}}=(${layer.area.toFixed(2)})(${layer.stress.toFixed(1)})`).join(",\\quad ")},\\quad ${r.tensionLayers.map((layer) => `T_${layer.index}=(${layer.area.toFixed(2)})(${layer.stress.toFixed(1)})`).join(",\\quad ")}`
         : r.isDoublyReinforced
         ? `C_c=0.85(${fc})(${b})(${r.a.toFixed(1)}),\\quad C'_s=(${AsPrime})(${r.fsPrime?.toFixed(1)}),\\quad T=(${As})(${r.tensionStress.toFixed(1)})`
         : `C_c=0.85(${fc})(${b})(${r.a.toFixed(1)})=T=(${As})(${r.tensionStress.toFixed(1)})`,

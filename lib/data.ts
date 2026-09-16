@@ -24,19 +24,19 @@ export const stats: StatItem[] = [
 
 export const calculators: CalculatorSection[] = [
   {
-    label: "Rectangular Beam Analysis",
+    label: "Rectangular Beam Analysis and Design",
     color: "slate",
     items: [
       { name: "Rectangular Beam Analysis", description: "Verify the capacity of an existing rectangular beam", icon: "✓", color: "slate", href: "/calculators/rectangular-beam-analysis" },
-      { name: "Cracking Moment", description: "Compute Mcr for rectangular, T-, and L-beams", icon: "Mcr", color: "slate", href: "/calculators/cracking-moment" },
+      { name: "Rectangular Beam Design", description: "Design a reinforced rectangular beam for flexure", icon: "▭", color: "blue", href: "/calculators/flexural-beam-design" },
+      { name: "Shear Beam Design", description: "Design stirrup spacing and shear capacity", icon: "V", color: "teal", href: "/calculators/shear-capacity-design" },
     ],
   },
   {
-    label: "Rectangular Beam Design",
-    color: "blue",
+    label: "Beam Serviceability",
+    color: "red",
     items: [
-      { name: "Rectangular Beam Design", description: "Design a reinforced rectangular beam for flexure", icon: "▭", color: "blue", href: "/calculators/flexural-beam-design" },
-      { name: "Shear Beam Design", description: "Design stirrup spacing and shear capacity", icon: "V", color: "teal", href: "/calculators/shear-capacity-design" },
+      { name: "Cracking Moment", description: "Compute Mcr for rectangular, T-, and L-beams", icon: "Mcr", color: "slate", href: "/calculators/cracking-moment" },
       { name: "Deflection Check", description: "Check immediate and long-term deflection", icon: "δ", color: "red", href: "/calculators/deflection-check" },
     ],
   },
