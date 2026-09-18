@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { InlineKatex } from "@/components/shared/Katex";
-import { LBeamCrossSection } from "@/components/calculators/flexural-design/l-beam-design/LBeamCrossSection";
 import { TBeamAnalysisDiagram } from "./TBeamAnalysisDiagram";
 import type { TBeamAnalysisPrefill } from "@/lib/t-beam-design-transfer";
 import {
@@ -15,7 +14,6 @@ import {
   type FlangedBeamLayerInput,
 } from "@/lib/flanged-beam-analysis";
 
-const barSizes = [12, 16, 20, 25, 28, 32, 36];
 const stirrupSizes = [10, 12, 16];
 interface EditableLayer { id: number; count: string; diameter: string; depth: string }
 type LayerRole = "tension" | "compression";
@@ -24,7 +22,6 @@ type DepthMode = "direct" | "fromH";
 export default function FlangedBeamAnalysisPage({ shape, prefill }: { shape: FlangedBeamShape; prefill?: TBeamAnalysisPrefill }) {
   const [bw, setBw] = useState(String(prefill?.bw ?? 300));
   const [hf, setHf] = useState(String(prefill?.hf ?? 120));
-  const [d, setD] = useState(String(prefill?.d ?? 550));
   const [depthMode, setDepthMode] = useState<DepthMode>("direct");
   const [h, setH] = useState("600");
   const [clearCover, setClearCover] = useState(String(prefill?.clearCover ?? 40));
@@ -37,8 +34,6 @@ export default function FlangedBeamAnalysisPage({ shape, prefill }: { shape: Fla
   const [fc, setFc] = useState(String(prefill?.fc ?? 28));
   const [fy, setFy] = useState(String(prefill?.fy ?? 420));
   const [Es, setEs] = useState(String(prefill?.Es ?? 200000));
-  const [barCount, setBarCount] = useState(String(prefill?.tensionLayers.reduce((sum, layer) => sum + layer.barCount, 0) ?? 4));
-  const [barDiameter, setBarDiameter] = useState(prefill?.tensionLayers[0]?.barDiameter ?? 25);
   const [Mu, setMu] = useState(prefill ? String(prefill.Mu) : "");
   const [isDoubly, setIsDoubly] = useState((prefill?.compressionLayers.length ?? 0) > 0);
   const [nextLayerId, setNextLayerId] = useState(10);
@@ -69,7 +64,7 @@ export default function FlangedBeamAnalysisPage({ shape, prefill }: { shape: Fla
     const layers = role === "tension" ? tensionLayers : compressionLayers;
     const previous = layers.at(-1);
     const layer = { id: nextLayerId, count: "2", diameter: previous?.diameter ?? "16",
-      depth: String(Number(previous?.depth ?? (role === "tension" ? d : "60")) + (role === "tension" ? -45 : 45)) };
+      depth: String(Number(previous?.depth ?? (role === "tension" ? "550" : "60")) + (role === "tension" ? -45 : 45)) };
     if (role === "tension") setTensionLayers((current) => [...current, layer]);
     else setCompressionLayers((current) => [...current, layer]);
     setNextLayerId((id) => id + 1);
@@ -88,7 +83,7 @@ export default function FlangedBeamAnalysisPage({ shape, prefill }: { shape: Fla
     }));
     let parsedTensionLayers: FlangedBeamLayerInput[] | undefined;
     let parsedCompressionLayers: FlangedBeamLayerInput[] | undefined;
-    if (shape === "T") {
+    if (shape === "T" || shape === "L") {
       try {
         if (depthMode === "fromH") {
           const derived = deriveTBeamLayersFromOverallHeight({
@@ -118,25 +113,25 @@ export default function FlangedBeamAnalysisPage({ shape, prefill }: { shape: Fla
     const totalTensionArea = parsedTensionLayers?.reduce((sum, layer) => sum + tensionArea(layer), 0) ?? 0;
     const effectiveDepth = parsedTensionLayers && totalTensionArea > 0
       ? parsedTensionLayers.reduce((sum, layer) => sum + tensionArea(layer) * layer.depth, 0) / totalTensionArea
-      : Number(d);
+      : Number(tensionLayers.at(-1)?.depth ?? 550);
     const parsed = {
       shape,
       bw: Number(bw),
       hf: Number(hf),
       d: effectiveDepth,
-      flangeWidthMode: shape === "T" ? flangeWidthMode : "calculated",
-      bf: shape === "T" && flangeWidthMode === "given" ? Number(bf) : undefined,
+      flangeWidthMode,
+      bf: flangeWidthMode === "given" ? Number(bf) : undefined,
       span: shape === "L" || flangeWidthMode === "calculated" ? Number(span) : undefined,
-      clearSpacingLeft: shape === "L" || flangeWidthMode === "calculated" ? Number(clearSpacingLeft) : undefined,
+      clearSpacingLeft: flangeWidthMode === "calculated" ? Number(clearSpacingLeft) : undefined,
       clearSpacingRight: shape === "T" && flangeWidthMode === "calculated" ? Number(clearSpacingRight) : undefined,
       fc: Number(fc),
       fy: Number(fy),
-      Es: shape === "T" ? Number(Es) : undefined,
-      barCount: Number(barCount),
-      barDiameter,
+      Es: Number(Es),
+      barCount: Number(tensionLayers[0]?.count ?? 4),
+      barDiameter: Number(tensionLayers[0]?.diameter ?? 25),
       tensionLayers: parsedTensionLayers,
       compressionLayers: parsedCompressionLayers,
-      depthGeometry: shape === "T" && depthMode === "fromH"
+      depthGeometry: depthMode === "fromH"
         ? { h: Number(h), clearCover: Number(clearCover), stirrupDiameter } : undefined,
       Mu: Mu.trim() === "" ? null : Number(Mu),
     };
@@ -165,12 +160,11 @@ export default function FlangedBeamAnalysisPage({ shape, prefill }: { shape: Fla
         <div className="mt-6 grid grid-cols-1 gap-3 rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] p-4 sm:grid-cols-2 sm:p-5">
           <Field label="bw — web width (mm)" value={bw} onChange={setBw} />
           <Field label="hf — flange thickness (mm)" value={hf} onChange={setHf} />
-          {shape === "L" && <Field label="d — effective depth (mm)" value={d} onChange={setD} />}
-          {shape === "T" && (
+          {(shape === "T" || shape === "L") && (
             <div>
-              <label className="mb-1 block text-[10px] font-medium text-[var(--text-muted)]" htmlFor="t-flange-width-mode">Effective flange width, bf</label>
+              <label className="mb-1 block text-[10px] font-medium text-[var(--text-muted)]" htmlFor={`${shape.toLowerCase()}-flange-width-mode`}>Effective flange width, bf</label>
               <select
-                id="t-flange-width-mode"
+                id={`${shape.toLowerCase()}-flange-width-mode`}
                 value={flangeWidthMode}
                 onChange={(event) => {
                   setFlangeWidthMode(event.target.value as "calculated" | "given");
@@ -185,7 +179,7 @@ export default function FlangedBeamAnalysisPage({ shape, prefill }: { shape: Fla
               </select>
             </div>
           )}
-          {shape === "T" && flangeWidthMode === "given"
+          {flangeWidthMode === "given"
             ? <Field label="bf — given effective flange width (mm)" value={bf} onChange={setBf} />
             : <>
                 <Field label="ℓn — beam clear span (mm)" value={span} onChange={setSpan} />
@@ -194,20 +188,9 @@ export default function FlangedBeamAnalysisPage({ shape, prefill }: { shape: Fla
               </>}
           <Field label="f′c (MPa)" value={fc} onChange={setFc} />
           <Field label="fy (MPa)" value={fy} onChange={setFy} />
-          {shape === "T" && <Field label="Es — steel modulus (MPa)" value={Es} onChange={setEs} />}
-          {shape === "L" && <><Field label="Number of tension bars" value={barCount} onChange={setBarCount} step="1" />
-          <div>
-            <label className="mb-1 block text-[10px] font-medium text-[var(--text-muted)]">Tension-bar diameter (mm)</label>
-            <select
-              value={barDiameter}
-              onChange={(event) => setBarDiameter(Number(event.target.value))}
-              className="w-full rounded-md border border-[var(--border)] bg-[var(--bg)] px-2 py-1.5 text-[12px] text-[var(--text)]"
-            >
-              {barSizes.map((size) => <option key={size} value={size}>{size} mm</option>)}
-            </select>
-          </div></>}
+          <Field label="Es — steel modulus (MPa)" value={Es} onChange={setEs} />
           <Field label="Mu — applied factored moment (kN·m), optional" value={Mu} onChange={setMu} />
-          {shape === "T" && <div className="border-t border-[var(--border)] pt-4 sm:col-span-2">
+          <div className="border-t border-[var(--border)] pt-4 sm:col-span-2">
             <label className="mb-2 block text-[10px] font-medium text-[var(--text-muted)]">Effective depth</label>
             <div className="flex gap-2">
               <button type="button" onClick={() => { setDepthMode("direct"); setResult(null); setSteps([]); setError(""); }}
@@ -234,8 +217,8 @@ export default function FlangedBeamAnalysisPage({ shape, prefill }: { shape: Fla
                 <p className="text-[10px] text-[var(--text-muted)] sm:col-span-3">Rows use 25 mm clear vertical spacing; depths are derived from h, cover, stirrup and bar diameters.</p>
               </div>
             )}
-          </div>}
-          {shape === "T" && <div className="sm:col-span-2">
+          </div>
+          <div className="sm:col-span-2">
             <label className="mb-1 block text-[10px] font-medium text-[var(--text-muted)]" htmlFor="t-reinforcement-layout">Longitudinal reinforcement</label>
             <select id="t-reinforcement-layout" value={isDoubly ? "doubly" : "singly"} onChange={(event) => { setIsDoubly(event.target.value === "doubly"); setResult(null); }} className="w-full rounded-md border border-[var(--border)] bg-[var(--bg)] px-2 py-1.5 text-[12px] text-[var(--text)]">
               <option value="singly">Singly reinforced</option><option value="doubly">Doubly reinforced</option>
@@ -244,15 +227,15 @@ export default function FlangedBeamAnalysisPage({ shape, prefill }: { shape: Fla
               <LayerEditor title="Tension reinforcement layers" role="tension" depthMode={depthMode} layers={tensionLayers} onUpdate={editLayer} onAdd={addLayer} onRemove={removeLayer} />
               {isDoubly && <LayerEditor title="Compression reinforcement layers (web only)" role="compression" depthMode={depthMode} layers={compressionLayers} onUpdate={editLayer} onAdd={addLayer} onRemove={removeLayer} />}
             </div>
-          </div>}
+          </div>
         </div>
 
         <p className="mt-2 text-[9px] leading-relaxed text-[var(--text-muted)]">
-          {shape === "T"
-            ? flangeWidthMode === "given"
-              ? "The entered bf is used directly for analysis. Confirm that it is the permitted effective flange width for this beam."
-              : "T-beam: enter the clear face-to-face distance to the adjacent web on each side, not center-to-center spacing. Each overhang is the least of 8hf, sw/2, and ℓn/8; bf = bw + left overhang + right overhang."
-            : "L-beam: enter the one clear face-to-face distance to the adjacent web, not center-to-center spacing. The overhang is the least of 6hf, sw/2, and ℓn/12; bf = bw + overhang."}
+          {flangeWidthMode === "given"
+            ? "The entered bf is used directly for analysis. Confirm that it is the permitted effective flange width for this beam."
+            : shape === "T"
+              ? "T-beam: enter the clear face-to-face distance to the adjacent web on each side, not center-to-center spacing. Each overhang is the least of 8hf, sw/2, and ℓn/8; bf = bw + left overhang + right overhang."
+              : "L-beam: enter the one clear face-to-face distance to the adjacent web, not center-to-center spacing. The overhang is the least of 6hf, sw/2, and ℓn/12; bf = bw + overhang."}
         </p>
 
         <button
@@ -271,43 +254,26 @@ export default function FlangedBeamAnalysisPage({ shape, prefill }: { shape: Fla
               {result.message}
             </div>
 
-            {shape === "T" ? (
-              <div className="grid min-w-0 items-start gap-3 xl:grid-cols-[minmax(0,1fr)_280px]">
-                <TBeamAnalysisDiagram result={result} bw={Number(bw)} hf={Number(hf)} fc={Number(fc)} overallHeight={depthMode === "fromH" ? Number(h) : undefined} />
-                <CapacityOverview result={result} />
-              </div>
-            ) : (
-              <LBeamCrossSection
-                beff={result.beff}
-                effectiveOverhang={result.effectiveOverhang ?? 0}
-                bw={Number(bw)}
-                hf={Number(hf)}
-                d={Number(d)}
-                a={result.a}
-                barDiameter={barDiameter}
-                barsRequired={Number(barCount)}
-                barsPerLayer={Math.min(Number(barCount), 4)}
-                sectionCase={result.sectionCase}
-              />
-            )}
+            <div className="grid min-w-0 items-start gap-3 xl:grid-cols-[minmax(0,1fr)_280px]">
+              <TBeamAnalysisDiagram shape={shape} result={result} bw={Number(bw)} hf={Number(hf)} fc={Number(fc)} overallHeight={depthMode === "fromH" ? Number(h) : undefined} />
+              <CapacityOverview result={result} />
+            </div>
 
             <div className="mt-4">
               <ResultRow label="Analysis status" value={result.status} bold />
-              {shape === "T" && <>
-                <ResultRow label="Section type" value={result.compressionLayers.length ? "Doubly reinforced" : "Singly reinforced"} />
-                {result.leftOverhang !== null && <ResultRow label="Effective overhangs, left / right" value={result.leftOverhang.toFixed(2) + " / " + result.rightOverhang!.toFixed(2) + " mm"} />}
-                <ResultRow label="Steel modulus, Es" value={result.Es.toFixed(0) + " MPa"} />
-                <ResultRow label="Area-weighted tension depth, d" value={result.d.toFixed(1) + " mm"} />
-                <ResultRow label="Flange-only trial, a" value={result.flangeTrialA!.toFixed(2) + " mm — " + (result.webTrialA === null ? "within flange" : "assumption failed")} />
-                {result.webTrialA !== null && <ResultRow label="Flange + web trial, a" value={result.webTrialA.toFixed(2) + " mm"} />}
-                <ResultRow label="Final solution method" value={result.yieldTrialAccepted ? "Yield-based closed form, verified" : "Strain-compatible force equilibrium"} />
-                <ResultRow label="Tension layers" value={result.tensionLayers.map((layer) => layer.barCount + " at " + layer.depth.toFixed(1) + " mm").join("; ")} />
-                {result.compressionLayers.length > 0 && <ResultRow label="Compression layers" value={result.compressionLayers.map((layer) => layer.barCount + " at " + layer.depth.toFixed(1) + " mm").join("; ")} />}
-                {result.compressionLayers.map((layer, index) => <ResultRow key={index} label={"Compression layer " + (index + 1)} value={(layer.stress < 0 ? "Tension" : "Compression") + ", " + (layer.yields ? "yielded" : "elastic") + " (" + layer.stress.toFixed(1) + " MPa)"} />)}
-                {result.tensionLayers.map((layer, index) => <ResultRow key={index} label={"Tension layer " + (index + 1)} value={(layer.stress < 0 ? "Tension" : "Compression") + ", " + (layer.yields ? "yielded" : "elastic") + " (" + Math.abs(layer.stress).toFixed(1) + " MPa)"} />)}
-              </>}
-              <ResultRow label="Effective flange width, bf" value={`${result.beff.toFixed(2)} mm`} />
+              <ResultRow label="Section type" value={result.compressionLayers.length ? "Doubly reinforced" : "Singly reinforced"} />
+              {result.leftOverhang !== null && <ResultRow label="Effective overhangs, left / right" value={result.leftOverhang.toFixed(2) + " / " + result.rightOverhang!.toFixed(2) + " mm"} />}
               {result.effectiveOverhang !== null && <ResultRow label="Effective overhang, bo" value={`${result.effectiveOverhang.toFixed(2)} mm`} />}
+              <ResultRow label="Steel modulus, Es" value={result.Es.toFixed(0) + " MPa"} />
+              <ResultRow label="Area-weighted tension depth, d" value={result.d.toFixed(1) + " mm"} />
+              {result.flangeTrialA !== null && <ResultRow label="Flange-only trial, a" value={result.flangeTrialA.toFixed(2) + " mm — " + (result.webTrialA === null ? "within flange" : "assumption failed")} />}
+              {result.webTrialA !== null && <ResultRow label="Flange + web trial, a" value={result.webTrialA.toFixed(2) + " mm"} />}
+              <ResultRow label="Final solution method" value={result.yieldTrialAccepted ? "Yield-based closed form, verified" : "Strain-compatible force equilibrium"} />
+              <ResultRow label="Tension layers" value={result.tensionLayers.map((layer) => layer.barCount + " at " + layer.depth.toFixed(1) + " mm").join("; ")} />
+              {result.compressionLayers.length > 0 && <ResultRow label="Compression layers" value={result.compressionLayers.map((layer) => layer.barCount + " at " + layer.depth.toFixed(1) + " mm").join("; ")} />}
+              {result.compressionLayers.map((layer, index) => <ResultRow key={index} label={"Compression layer " + (index + 1)} value={(layer.stress < 0 ? "Tension" : "Compression") + ", " + (layer.yields ? "yielded" : "elastic") + " (" + layer.stress.toFixed(1) + " MPa)"} />)}
+              {result.tensionLayers.map((layer, index) => <ResultRow key={index} label={"Tension layer " + (index + 1)} value={(layer.stress < 0 ? "Tension" : "Compression") + ", " + (layer.yields ? "yielded" : "elastic") + " (" + Math.abs(layer.stress).toFixed(1) + " MPa)"} />)}
+              <ResultRow label="Effective flange width, bf" value={`${result.beff.toFixed(2)} mm`} />
               <ResultRow label="Provided steel, As" value={`${result.As.toFixed(2)} mm²`} />
               <ResultRow label="β1" value={result.beta1.toFixed(3)} />
               <ResultRow label="Compression-block case" value={result.sectionCase === "flange" ? "a ≤ hf — within flange" : "a > hf — flange and web"} bold />
@@ -331,7 +297,7 @@ export default function FlangedBeamAnalysisPage({ shape, prefill }: { shape: Fla
             </button>
             {showSolution && (
               <div className="mt-3 space-y-4 rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] p-3 sm:p-4">
-                {shape === "T" && <div><h2 className="text-base font-bold">Full Manual Capacity Solution</h2><p className="mt-1 text-[10px] text-[var(--text-muted)]">Width, steel areas, stress-block case, compatible strains and stresses, force equilibrium, moment and strength reduction follow the NSCP 2015 / ACI 318-14 flexural assumptions.</p></div>}
+                <div><h2 className="text-base font-bold">Full Manual Capacity Solution</h2><p className="mt-1 text-[10px] text-[var(--text-muted)]">Width, steel areas, stress-block case, compatible strains and stresses, force equilibrium, moment and strength reduction follow the NSCP 2015 / ACI 318-14 flexural assumptions.</p></div>
                 {steps.map((step, index) => (
                   <div key={`${step.label}-${index}`} className="min-w-0 rounded-md border border-[var(--border)] bg-[var(--bg)] p-3">
                     <div className="flex items-center gap-2">

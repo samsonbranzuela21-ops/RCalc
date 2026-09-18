@@ -51,6 +51,31 @@ export function tBeamAnalysisHref(input: TBeamDesignInput, result: TBeamDesignRe
   return "/calculators/t-beam-analysis?" + params.toString();
 }
 
+export function lBeamAnalysisHref(input: TBeamDesignInput, result: TBeamDesignResult): string {
+  const params = new URLSearchParams({
+    source: "l-beam-design",
+    bw: String(input.bw),
+    hf: String(input.hf),
+    d: String(input.d),
+    flangeWidthMode: result.flangeWidthMode,
+    fc: String(input.fc),
+    fy: String(input.fy),
+    Es: String(result.Es),
+    mu: String(input.Mu),
+    cover: String(input.clearCover ?? 40),
+    stirrup: String(input.stirrupDiameter ?? 10),
+    tensionLayers: serializeLayers(result.tensionLayers),
+    compressionLayers: serializeLayers(result.compressionLayers),
+  });
+  if (result.flangeWidthMode === "given") {
+    params.set("bf", String(result.beff));
+  } else {
+    params.set("span", String(input.span));
+    params.set("clearSpacingLeft", String(input.clearSpacingLeft));
+  }
+  return "/calculators/l-beam-analysis?" + params.toString();
+}
+
 type Query = Record<string, string | string[] | undefined>;
 
 function single(value: Query[string]): string | undefined {
@@ -84,8 +109,8 @@ function parseLayers(value: Query[string], allowEmpty: boolean): FlangedBeamLaye
   return layers.every((layer) => layer !== null) ? layers as FlangedBeamLayerInput[] : null;
 }
 
-export function readTBeamDesignTransfer(params: Query): TBeamAnalysisPrefill | undefined {
-  if (single(params.source) !== "t-beam-design") return undefined;
+function readDesignTransfer(params: Query, source: "t-beam-design" | "l-beam-design", requireRightSpacing: boolean): TBeamAnalysisPrefill | undefined {
+  if (single(params.source) !== source) return undefined;
   const bw = positiveNumber(params.bw);
   const hf = positiveNumber(params.hf);
   const d = positiveNumber(params.d);
@@ -108,16 +133,24 @@ export function readTBeamDesignTransfer(params: Query): TBeamAnalysisPrefill | u
   const bf = flangeWidthMode === "given" ? positiveNumber(params.bf) : null;
   const span = flangeWidthMode === "calculated" ? positiveNumber(params.span) : null;
   const clearSpacingLeft = flangeWidthMode === "calculated" ? positiveNumber(params.clearSpacingLeft) : null;
-  const clearSpacingRight = flangeWidthMode === "calculated" ? positiveNumber(params.clearSpacingRight) : null;
+  const clearSpacingRight = flangeWidthMode === "calculated" && requireRightSpacing ? positiveNumber(params.clearSpacingRight) : null;
   if (flangeWidthMode === "given" ? bf === null || bf < bw! :
-    span === null || clearSpacingLeft === null || clearSpacingRight === null) return undefined;
+    span === null || clearSpacingLeft === null || (requireRightSpacing && clearSpacingRight === null)) return undefined;
 
   return {
     bw: bw!, hf: hf!, d: d!, fc: fc!, fy: fy!, Es: Es!, Mu: Mu!,
     clearCover: clearCover!, stirrupDiameter: stirrupDiameter!,
     flangeWidthMode,
     ...(flangeWidthMode === "given" ? { bf: bf! } :
-      { span: span!, clearSpacingLeft: clearSpacingLeft!, clearSpacingRight: clearSpacingRight! }),
+      { span: span!, clearSpacingLeft: clearSpacingLeft!, ...(requireRightSpacing ? { clearSpacingRight: clearSpacingRight! } : {}) }),
     tensionLayers, compressionLayers,
   };
+}
+
+export function readTBeamDesignTransfer(params: Query): TBeamAnalysisPrefill | undefined {
+  return readDesignTransfer(params, "t-beam-design", true);
+}
+
+export function readLBeamDesignTransfer(params: Query): TBeamAnalysisPrefill | undefined {
+  return readDesignTransfer(params, "l-beam-design", false);
 }

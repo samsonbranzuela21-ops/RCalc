@@ -14,7 +14,7 @@ import {
 
 const barSizes = [12, 16, 20, 25, 28, 32, 36];
 
-export default function TBeamDesignPage() {
+export default function TBeamDesignPage({ shape = "T" }: { shape?: "T" | "L" }) {
   const [Mu, setMu] = useState("650");
   const [bw, setBw] = useState("300");
   const [hf, setHf] = useState("120");
@@ -41,6 +41,7 @@ export default function TBeamDesignPage() {
 
   function handleCalculate() {
     const parsed = {
+      shape,
       Mu: Number(Mu),
       bw: Number(bw),
       hf: Number(hf),
@@ -49,7 +50,7 @@ export default function TBeamDesignPage() {
       bf: flangeWidthMode === "given" ? Number(bf) : undefined,
       span: flangeWidthMode === "calculated" ? Number(span) : undefined,
       clearSpacingLeft: flangeWidthMode === "calculated" ? Number(clearSpacingLeft) : undefined,
-      clearSpacingRight: flangeWidthMode === "calculated" ? Number(clearSpacingRight) : undefined,
+      clearSpacingRight: shape === "T" && flangeWidthMode === "calculated" ? Number(clearSpacingRight) : undefined,
       fc: Number(fc),
       fy: Number(fy),
       Es: Number(Es),
@@ -86,7 +87,7 @@ export default function TBeamDesignPage() {
       setError(
         caughtError instanceof Error
           ? caughtError.message
-          : "Unable to calculate the T-beam design."
+          : `Unable to calculate the ${shape}-beam design.`
       );
       setResult(null);
       setDesignInput(null);
@@ -99,14 +100,14 @@ export default function TBeamDesignPage() {
       <div className="mx-auto min-w-0 max-w-6xl">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <h1 className="text-2xl font-bold">T-Beam Design</h1>
+            <h1 className="text-2xl font-bold">{shape}-Beam Design</h1>
             <p className="mt-1 text-[12px] leading-relaxed text-[var(--text-muted)]">
-              Singly or doubly reinforced interior T-beam under positive bending — NSCP 2015
+              Singly or doubly reinforced {shape === "T" ? "interior T-beam" : "edge L-beam"} under positive bending — NSCP 2015
               and ACI 318-14 strength design method.
             </p>
           </div>
-          <Link href="/calculators/t-beam-analysis" className="text-xs font-semibold text-[#f5941f] underline underline-offset-4">
-            Need section analysis? Open T-Beam Analysis
+          <Link href={shape === "T" ? "/calculators/t-beam-analysis" : "/calculators/l-beam-analysis"} className="text-xs font-semibold text-[#f5941f] underline underline-offset-4">
+            Need section analysis? Open {shape}-Beam Analysis
           </Link>
         </div>
 
@@ -132,7 +133,7 @@ export default function TBeamDesignPage() {
               Effective flange width, bf
             </label>
             <select
-              id="t-design-flange-width-mode"
+              id={`${shape.toLowerCase()}-design-flange-width-mode`}
               value={flangeWidthMode}
               onChange={(event) => {
                 setFlangeWidthMode(event.target.value as "calculated" | "given");
@@ -151,8 +152,8 @@ export default function TBeamDesignPage() {
           ) : (
             <>
               <Field label="ln — beam clear span (mm)" value={span} onChange={setSpan} />
-              <Field label="sw,L — clear distance to left adjacent web (mm)" value={clearSpacingLeft} onChange={setClearSpacingLeft} />
-              <Field label="sw,R — clear distance to right adjacent web (mm)" value={clearSpacingRight} onChange={setClearSpacingRight} />
+              <Field label={shape === "T" ? "sw,L — clear distance to left adjacent web (mm)" : "sw — clear distance to adjacent web (mm)"} value={clearSpacingLeft} onChange={setClearSpacingLeft} />
+              {shape === "T" && <Field label="sw,R — clear distance to right adjacent web (mm)" value={clearSpacingRight} onChange={setClearSpacingRight} />}
             </>
           )}
           <Field label="Concrete strength, f′c (MPa)" value={fc} onChange={setFc} />
@@ -204,10 +205,12 @@ export default function TBeamDesignPage() {
         </div>
 
         <p className="mt-2 text-[9px] leading-relaxed text-[var(--text-muted)]">
-          This calculator treats the member as a monolithic interior T-beam.
+          This calculator treats the member as a monolithic {shape === "T" ? "interior T-beam" : "edge L-beam with slab flange on one side"}.
           {flangeWidthMode === "given"
             ? "The entered bf is used directly for design. Confirm it is the permitted effective flange width for this beam. "
-            : "Enter the clear face-to-face distance to the adjacent web on each side, not center-to-center spacing. Each overhang is the least of 8hf, sw/2, and ln/8; bf = bw + left overhang + right overhang. "}
+            : shape === "T"
+              ? "Enter the clear face-to-face distance to the adjacent web on each side, not center-to-center spacing. Each overhang is the least of 8hf, sw/2, and ln/8; bf = bw + left overhang + right overhang. "
+              : "Enter the one clear face-to-face distance to the adjacent web, not center-to-center spacing. The overhang is the least of 6hf, sw/2, and ln/12; bf = bw + overhang. "}
           d is the depth to the outer tension-bar row; cover is measured to the
           outside of the stirrup and locates compression steel. Bar arrangements
           are checked within a maximum of three rows in the web.
@@ -218,7 +221,7 @@ export default function TBeamDesignPage() {
           onClick={handleCalculate}
           className="mt-4 w-full rounded-md bg-[#f5941f] px-4 py-2.5 text-[12px] font-semibold text-[#1a1300] hover:brightness-105 active:scale-[0.99]"
         >
-          Calculate T-Beam Design
+          Calculate {shape}-Beam Design
         </button>
 
         {error && (
@@ -227,7 +230,7 @@ export default function TBeamDesignPage() {
           </div>
         )}
 
-        {result && designInput && <TBeamDesignResultView result={result} input={designInput} />}
+        {result && designInput && <TBeamDesignResultView shape={shape} result={result} input={designInput} />}
 
         {result && steps.length > 0 && (
           <div className="mt-3">
@@ -242,7 +245,7 @@ export default function TBeamDesignPage() {
             {showSolution && (
               <div className="mt-3 space-y-4 rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] p-3 sm:p-4">
                 <div>
-                  <h2 className="text-base font-extrabold">Full Manual T-Beam Design Solution</h2>
+                  <h2 className="text-base font-extrabold">Full Manual {shape}-Beam Design Solution</h2>
                   <p className="mt-1 text-[11px] leading-relaxed text-[var(--text-muted)]">
                     Each step shows the equation, numerical substitution, and result.
                     Values are rounded only for display; final capacity uses the full-precision bar layout.

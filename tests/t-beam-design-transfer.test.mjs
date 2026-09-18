@@ -11,7 +11,7 @@ registerHooks({
 });
 const { designTBeam } = await import("../lib/t-beam.ts");
 const { analyzeFlangedBeam } = await import("../lib/flanged-beam-analysis.ts");
-const { tBeamAnalysisHref, readTBeamDesignTransfer } =
+const { lBeamAnalysisHref, readLBeamDesignTransfer, tBeamAnalysisHref, readTBeamDesignTransfer } =
   await import("../lib/t-beam-design-transfer.ts");
 
 const base = {
@@ -27,6 +27,13 @@ function roundTrip(input) {
   const href = tBeamAnalysisHref(input, result);
   const query = Object.fromEntries(new URL(href, "http://localhost").searchParams);
   return { result, href, prefill: readTBeamDesignTransfer(query) };
+}
+
+function roundTripL(input) {
+  const result = designTBeam(input);
+  const href = lBeamAnalysisHref(input, result);
+  const query = Object.fromEntries(new URL(href, "http://localhost").searchParams);
+  return { result, href, prefill: readLBeamDesignTransfer(query) };
 }
 
 test("calculated asymmetric T flange design transfers exact adopted layers and geometry", () => {
@@ -65,6 +72,23 @@ test("given bf design transfers without a span or spacing", () => {
   });
   assert.ok(Math.abs(analyzed.beff - result.beff) < 1e-8);
   assert.ok(Math.abs(analyzed.phiMn - result.phiMn) < 1e-5);
+});
+
+test("calculated L flange design transfers one-sided geometry and adopted layers", () => {
+  const input = { ...base, shape: "L", Mu: 150, span: 6000,
+    clearSpacingLeft: 2700, clearSpacingRight: undefined };
+  const { result, href, prefill } = roundTripL(input);
+  assert.match(href, /l-beam-analysis\?/);
+  assert.ok(prefill);
+  assert.equal(prefill.clearSpacingLeft, 2700);
+  assert.equal(prefill.clearSpacingRight, undefined);
+  assert.equal(prefill.span, 6000);
+  assert.equal(prefill.compressionLayers.length, result.compressionLayers.length);
+  const analyzed = analyzeFlangedBeam({
+    ...prefill, shape: "L", barCount: prefill.tensionLayers[0].barCount,
+    barDiameter: prefill.tensionLayers[0].barDiameter,
+  });
+  assert.ok(Math.abs(analyzed.beff - result.beff) < 1e-8);
 });
 
 test("transfer rejects invalid or unrelated query data", () => {

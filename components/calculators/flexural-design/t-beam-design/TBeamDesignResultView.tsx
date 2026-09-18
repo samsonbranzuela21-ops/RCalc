@@ -3,14 +3,16 @@ import type { ReactNode } from "react";
 import { DiagramFrame, DiagramLegend } from "@/components/shared/DiagramFrame";
 import { TBeamCrossSection } from "@/components/calculators/flexural-design/t-beam-design/TBeamCrossSection";
 import type { TBeamDesignInput, TBeamDesignResult } from "@/lib/t-beam";
-import { tBeamAnalysisHref } from "@/lib/t-beam-design-transfer";
+import { lBeamAnalysisHref, tBeamAnalysisHref } from "@/lib/t-beam-design-transfer";
 
 const REBAR_BLUE = "#60bfff";
 
 export function TBeamDesignResultView({
+  shape = "T",
   result,
   input,
 }: {
+  shape?: "T" | "L";
   result: TBeamDesignResult;
   input: TBeamDesignInput;
 }) {
@@ -22,7 +24,7 @@ export function TBeamDesignResultView({
   const rounded = (value: number, digits = 2) => value.toFixed(digits);
 
   return (
-    <section className="mt-6 rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] p-4 sm:p-5" aria-label="T-beam flexural design result">
+    <section className="mt-6 rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] p-4 sm:p-5" aria-label={`${shape}-beam flexural design result`}>
       <div className={"rounded-lg border px-4 py-3 " + (result.ok
         ? "border-[#39c98a]/40 bg-[#39c98a]/10"
         : "border-[#e05353]/40 bg-[#e05353]/10")}>
@@ -32,7 +34,7 @@ export function TBeamDesignResultView({
         <p className="mt-1 text-sm font-semibold">
           {result.ok
             ? (result.sectionType === "doubly" ? "Doubly" : "Singly") +
-              " reinforced T-beam: use " + result.barsRequired + "–" +
+              " reinforced " + shape + "-beam: use " + result.barsRequired + "–" +
               result.tensionLayers[0].diameter + " mm tension bars" +
               (result.compressionBarsRequired > 0
                 ? " and " + result.compressionBarsRequired + "–" +
@@ -53,7 +55,7 @@ export function TBeamDesignResultView({
         >
           <div className="grid min-w-[620px] gap-3 lg:grid-cols-[minmax(390px,1.1fr)_minmax(280px,.9fr)]">
             <section className="rounded-lg border border-[var(--border)] bg-[var(--bg)] p-3">
-              <h3 className="text-xs font-bold">T-beam cross-section</h3>
+              <h3 className="text-xs font-bold">{shape}-beam cross-section</h3>
               <p className="mt-1 text-[10px] text-[var(--text-muted)]">
                 Adopted bar counts and layers within the web, flange, and compression block.
               </p>
@@ -70,6 +72,7 @@ export function TBeamDesignResultView({
                 stirrup={stirrup}
                 tensionLayers={result.tensionLayers}
                 compressionLayers={result.compressionLayers}
+                shape={shape}
               />
             </section>
             <div className="grid content-start gap-3">
@@ -82,7 +85,7 @@ export function TBeamDesignResultView({
                 ) : (
                   <>
                     <div className="mt-2 grid grid-cols-[1fr_auto_1fr] items-stretch gap-2">
-                      <DesignPart title="Beam 1" subtitle="T-beam concrete compression" lines={[
+                      <DesignPart title="Beam 1" subtitle={`${shape}-beam concrete compression`} lines={[
                         "Trial singly capacity: " + rounded(result.singlyTrialPhiMn) + " kN·m",
                         "Trial tension steel: " + rounded(result.asTensionControlledMax, 1) + " mm²",
                       ]} />
@@ -159,17 +162,17 @@ export function TBeamDesignResultView({
 
       <div className="mt-3 grid gap-3 lg:grid-cols-2">
         <ResultGroup title="Effective flange geometry">
-          <ResultRow label="Width source" value={result.flangeWidthMode === "given" ? "Given bf" : "Calculated from left and right clear spacing"} />
+          <ResultRow label="Width source" value={result.flangeWidthMode === "given" ? "Given bf" : shape === "T" ? "Calculated from left and right clear spacing" : "Calculated from one-sided clear spacing"} />
           <ResultRow label="Effective flange width, bf" value={rounded(result.beff, 1) + " mm"} bold />
           <ResultRow label="Web width, bw" value={rounded(input.bw, 1) + " mm"} />
           <ResultRow label="Flange thickness, hf" value={rounded(input.hf, 1) + " mm"} />
           {result.flangeWidthMode === "calculated" && <>
-            <ResultRow label="Left effective overhang" value={rounded(result.leftOverhang!, 1) + " mm"} />
-            <ResultRow label="Right effective overhang" value={rounded(result.rightOverhang!, 1) + " mm"} />
-            <ResultRow label="Each-side span limit, ln/8" value={rounded(result.spanLimit!, 1) + " mm"} />
-            <ResultRow label="Each-side thickness limit, 8hf" value={rounded(result.thicknessLimit!, 1) + " mm"} />
-            <ResultRow label="Left spacing limit, sw,L/2" value={rounded(result.leftSpacingLimit!, 1) + " mm"} />
-            <ResultRow label="Right spacing limit, sw,R/2" value={rounded(result.rightSpacingLimit!, 1) + " mm"} />
+            <ResultRow label={shape === "T" ? "Left effective overhang" : "Effective one-sided overhang"} value={rounded(result.leftOverhang!, 1) + " mm"} />
+            {shape === "T" && <ResultRow label="Right effective overhang" value={rounded(result.rightOverhang!, 1) + " mm"} />}
+            <ResultRow label={shape === "T" ? "Each-side span limit, ln/8" : "Span limit, ln/12"} value={rounded(result.spanLimit!, 1) + " mm"} />
+            <ResultRow label={shape === "T" ? "Each-side thickness limit, 8hf" : "Thickness limit, 6hf"} value={rounded(result.thicknessLimit!, 1) + " mm"} />
+            <ResultRow label={shape === "T" ? "Left spacing limit, sw,L/2" : "Spacing limit, sw/2"} value={rounded(result.leftSpacingLimit!, 1) + " mm"} />
+            {shape === "T" && <ResultRow label="Right spacing limit, sw,R/2" value={rounded(result.rightSpacingLimit!, 1) + " mm"} />}
           </>}
         </ResultGroup>
         <ResultGroup title="Final section checks">
@@ -189,12 +192,12 @@ export function TBeamDesignResultView({
       <div className="mt-4 rounded-lg border border-[var(--border)] bg-[var(--bg)] p-4">
         <p className="text-xs font-semibold">Continue with section analysis</p>
         <p className="mt-1 text-[11px] leading-relaxed text-[var(--text-muted)]">
-          Use the adopted flange geometry and bar layers in T-Beam Analysis to review the final
+          Use the adopted flange geometry and bar layers in {shape}-Beam Analysis to review the final
           neutral axis, steel stresses, and moment capacity independently.
         </p>
-        {result.ok ? <Link href={tBeamAnalysisHref(input, result)}
+        {result.ok ? <Link href={shape === "T" ? tBeamAnalysisHref(input, result) : lBeamAnalysisHref(input, result)}
           className="mt-3 inline-flex rounded-md border border-[#f5941f]/50 px-3 py-2 text-xs font-semibold text-[#f5941f] hover:bg-[#f5941f]/10">
-          Analyze this design in T-Beam Analysis
+          Analyze this design in {shape}-Beam Analysis
         </Link> : <p className="mt-2 text-[10px] text-[var(--text-muted)]">
           Complete a feasible design before transferring its adopted bars to analysis.
         </p>}

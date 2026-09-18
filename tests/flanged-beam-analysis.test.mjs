@@ -133,6 +133,23 @@ test("given T flange width must be at least the web width", () => {
   );
 });
 
+test("L-beam analysis accepts a given effective flange width without span or spacing", () => {
+  const base = { ...common };
+  delete base.span;
+  delete base.clearSpacingLeft;
+  delete base.clearSpacingRight;
+  const input = { ...base, shape: "L", flangeWidthMode: "given", bf: 900, Mu: null };
+  const result = analyzeFlangedBeam(input);
+  const steps = getFlangedBeamAnalysisSteps(input, result);
+
+  close(result.beff, 900);
+  assert.equal(result.effectiveOverhang, null);
+  assert.equal(result.flangeWidthMode, "given");
+  assert.equal(result.widthLimits.length, 0);
+  assert.equal(steps[0].label, "Given effective flange width");
+  assert.match(steps[0].formula, /b_\{f,\\mathrm\{given\}\}/);
+});
+
 test("calculated T flange width still requires span and both clear distances", () => {
   const base = { ...common };
   delete base.span;
@@ -185,6 +202,25 @@ test("analysis manual solution contains valid KaTeX for both shapes", () => {
         assert.doesNotThrow(() => katex.renderToString(math, { throwOnError: true }), step.label);
       }
     }
+  }
+});
+
+test("L-beam full manual solution includes every capacity-analysis stage", () => {
+  const input = { ...common, shape: "L" };
+  const result = analyzeFlangedBeam(input);
+  const labels = getFlangedBeamAnalysisSteps(input, result).map((step) => step.label);
+
+  for (const required of [
+    "Layer s1: steel area and depth",
+    "Layer s1: strain, stress and force",
+    "Determine stress-block region and solve force equilibrium",
+    "Concrete compression resultants and centroids",
+    "Nominal moment from every force about the top face",
+    "Strength reduction factor and design capacity",
+    "Minimum tensile strain for a nonprestressed beam",
+    "Demand-capacity check",
+  ]) {
+    assert.ok(labels.includes(required), `missing L-beam solution stage: ${required}`);
   }
 });
 

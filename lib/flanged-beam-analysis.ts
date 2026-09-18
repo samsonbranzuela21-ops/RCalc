@@ -156,7 +156,7 @@ function phiFromStrain(epsilonT: number, epsilonY: number) {
 export function analyzeFlangedBeam(input: FlangedBeamAnalysisInput): FlangedBeamAnalysisResult {
   const { shape, bw, hf, d, fc, fy, barCount, barDiameter, Mu } = input;
   const Es = input.Es ?? DEFAULT_ES;
-  const flangeWidthMode = shape === "T" ? input.flangeWidthMode ?? "calculated" : "calculated";
+  const flangeWidthMode = input.flangeWidthMode ?? "calculated";
   const values = [bw, hf, d, fc, fy, Es];
   if (
     values.some((value) => !Number.isFinite(value) || value <= 0) ||
@@ -192,7 +192,9 @@ export function analyzeFlangedBeam(input: FlangedBeamAnalysisInput): FlangedBeam
     !Number.isFinite(input.span) || input.span! <= 0 ||
     !Number.isFinite(input.clearSpacingLeft) || input.clearSpacingLeft! <= 0
   ) {
-    throw new Error("Enter a positive clear span ln and left-side clear spacing to calculate the flange width.");
+    throw new Error(shape === "T"
+      ? "Enter a positive clear span ln and left-side clear spacing to calculate the flange width."
+      : "Enter a positive clear span ln and clear spacing to calculate the flange width.");
   }
   if (shape === "T" && flangeWidthMode === "calculated" &&
     (!Number.isFinite(input.clearSpacingRight) || input.clearSpacingRight! <= 0)) {
@@ -204,11 +206,12 @@ export function analyzeFlangedBeam(input: FlangedBeamAnalysisInput): FlangedBeam
   let effectiveOverhang: number | null;
   let leftOverhang: number | null = null;
   let rightOverhang: number | null = null;
-  if (shape === "T") {
-    if (flangeWidthMode === "given") {
-      beff = input.bf!;
-      widthLimits = [];
-    } else {
+  if (flangeWidthMode === "given") {
+    beff = input.bf!;
+    widthLimits = [];
+    effectiveOverhang = null;
+  } else if (shape === "T") {
+    {
       const spanLimit = input.span! / 8;
       const thicknessLimit = 8 * hf;
       const leftSpacingLimit = input.clearSpacingLeft! / 2;
@@ -235,13 +238,13 @@ export function analyzeFlangedBeam(input: FlangedBeamAnalysisInput): FlangedBeam
   const epsilonY = fy / Es;
   // First test the rectangular/flange-only assumption with yielded tension steel.
   // If a exceeds hf, the overhang carries its full hf block and the web carries a.
-  const flangeTrialA = shape === "T" ? As * fy / (0.85 * fc * beff) : null;
+  const flangeTrialA = As * fy / (0.85 * fc * beff);
   const webTrialA = flangeTrialA !== null && flangeTrialA > hf
     ? (As * fy / (0.85 * fc) - (beff - bw) * hf) / bw
     : null;
   const yieldTrialA = webTrialA ?? flangeTrialA;
   const trialC = yieldTrialA === null ? null : yieldTrialA / beta1;
-  const yieldTrialAccepted = shape === "T" && trialC !== null && trialC > 0 && trialC < dExtreme &&
+  const yieldTrialAccepted = trialC !== null && trialC > 0 && trialC < dExtreme &&
     compressionInput.length === 0 && tensionInput.every((layer) =>
       EPSILON_CU * (layer.depth - trialC) / trialC >= epsilonY &&
       fractionInsideStressBlock(yieldTrialA!, layer) === 0);
@@ -362,20 +365,28 @@ export function getFlangedBeamAnalysisSteps(
   input: FlangedBeamAnalysisInput,
   result: FlangedBeamAnalysisResult
 ): FlangedBeamAnalysisStep[] {
-  if (input.shape === "T") return getLayeredTBeamSteps(input, result);
-  return getLBeamAnalysisSteps(input, result);
+  return getLayeredTBeamSteps(input, result);
 }
 
+// Retained for compatibility with older callers while the shared staged solution is used for both shapes.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function getLBeamAnalysisSteps(
   input: FlangedBeamAnalysisInput,
   result: FlangedBeamAnalysisResult
 ): FlangedBeamAnalysisStep[] {
-  const widthStep: FlangedBeamAnalysisStep = {
-    label: "Effective one-sided flange width",
-    formula: "b_o=\\min(6h_f,\\ s_w/2,\\ \\ell_n/12),\\quad b_f=b_w+b_o",
-    substitution: `s_w=${n(input.clearSpacingLeft!)}\\;\\mathrm{mm},\\quad b_o=\\min(${n(6 * input.hf)},\\ ${n(input.clearSpacingLeft! / 2)},\\ ${n(input.span! / 12)})`,
-    result: `b_o=${n(result.effectiveOverhang ?? 0)}\\;\\mathrm{mm},\\quad b_f=${n(input.bw)}+${n(result.effectiveOverhang ?? 0)}=${n(result.beff)}\\;\\mathrm{mm}`,
-  };
+  const widthStep: FlangedBeamAnalysisStep = result.flangeWidthMode === "given"
+    ? {
+      label: "Given effective flange width",
+      formula: "b_f=b_{f,\\mathrm{given}}",
+      substitution: `b_f=${n(input.bf!)}\\;\\mathrm{mm}`,
+      result: `b_f=${n(result.beff)}\\;\\mathrm{mm}`,
+    }
+    : {
+      label: "Effective one-sided flange width",
+      formula: "b_o=\\min(6h_f,\\ s_w/2,\\ \\ell_n/12),\\quad b_f=b_w+b_o",
+      substitution: `s_w=${n(input.clearSpacingLeft!)}\\;\\mathrm{mm},\\quad b_o=\\min(${n(6 * input.hf)},\\ ${n(input.clearSpacingLeft! / 2)},\\ ${n(input.span! / 12)})`,
+      result: `b_o=${n(result.effectiveOverhang ?? 0)}\\;\\mathrm{mm},\\quad b_f=${n(input.bw)}+${n(result.effectiveOverhang ?? 0)}=${n(result.beff)}\\;\\mathrm{mm}`,
+    };
   const equilibrium = result.sectionCase === "flange"
     ? "C_c=0.85f'_c b_fa"
     : "C_c=0.85f'_c\\left[b_wa+(b_f-b_w)h_f\\right]";
@@ -447,7 +458,12 @@ function getLayeredTBeamSteps(input: FlangedBeamAnalysisInput, r: FlangedBeamAna
   const width: FlangedBeamAnalysisStep[] = r.flangeWidthMode === "given"
     ? [{ label: "Given effective flange width", formula: "b_f=b_{f,\\mathrm{given}}",
       substitution: `b_f=${f(input.bf!)}\\;\\mathrm{mm}`, result: `b_f=${f(r.beff)}\\;\\mathrm{mm}` }]
-    : [
+    : input.shape === "L"
+      ? [{ label: "Effective one-sided flange width",
+          formula: "b_o=\\min(6h_f,\\ s_w/2,\\ \\ell_n/12),\\quad b_f=b_w+b_o",
+          substitution: `s_w=${f(input.clearSpacingLeft!)}\\;\\mathrm{mm},\\quad b_o=\\min(${f(6 * input.hf)},\\ ${f(input.clearSpacingLeft! / 2)},\\ ${f(input.span! / 12)})`,
+          result: `b_o=${f(r.effectiveOverhang!)}\\;\\mathrm{mm},\\quad b_f=${f(input.bw)}+${f(r.effectiveOverhang!)}=${f(r.beff)}\\;\\mathrm{mm}` }]
+      : [
       { label: "Left-side effective overhang",
         formula: "b_{o,L}=\\min(8h_f,\\ s_{w,L}/2,\\ \\ell_n/8)",
         substitution: `s_{w,L}=${f(input.clearSpacingLeft!)}\\;\\mathrm{mm},\\quad b_{o,L}=\\min(${f(8 * input.hf)},\\ ${f(input.clearSpacingLeft! / 2)},\\ ${f(input.span! / 8)})`,
@@ -474,7 +490,7 @@ function getLayeredTBeamSteps(input: FlangedBeamAnalysisInput, r: FlangedBeamAna
     substitution: `\\varepsilon_{${layer.symbol}}=0.003(${f(r.c)}-${f(layer.depth)})/${f(r.c)}=${f(layer.strain, 6)},\\quad f_{${layer.symbol}}=${f(layer.stress)}\\;\\mathrm{MPa}`,
     result: `F_{${layer.symbol}}=${f(layer.force / 1000)}\\;\\mathrm{kN},\\quad F_{${layer.symbol},\\mathrm{net}}=${f(layer.netForce / 1000)}\\;\\mathrm{kN}\\quad(${layer.yields ? "\\mathrm{yielded}" : "\\mathrm{elastic}"})`,
   }]);
-  const assumedA = r.flangeTrialA!;
+  const assumedA = r.flangeTrialA ?? r.As * input.fy / (0.85 * input.fc * r.beff);
   const selectedTrialA = r.webTrialA ?? assumedA;
   const selectedTrialC = selectedTrialA / r.beta1;
   const doubly = r.compressionLayers.length > 0;

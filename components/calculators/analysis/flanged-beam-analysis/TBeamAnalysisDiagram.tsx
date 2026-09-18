@@ -6,7 +6,7 @@ const barBlue = "#60bfff";
 const orange = "#f5941f";
 const red = "#e05a5a";
 
-export function TBeamAnalysisDiagram({ result: r, bw, hf, fc, overallHeight }: { result: FlangedBeamAnalysisResult; bw: number; hf: number; fc: number; overallHeight?: number }) {
+export function TBeamAnalysisDiagram({ shape, result: r, bw, hf, fc, overallHeight }: { shape: "T" | "L"; result: FlangedBeamAnalysisResult; bw: number; hf: number; fc: number; overallHeight?: number }) {
   const top = 65;
   const height = 255;
   const depth = overallHeight ?? Math.max(r.dExtreme * 1.08, hf * 1.5, r.a * 1.05);
@@ -14,7 +14,7 @@ export function TBeamAnalysisDiagram({ result: r, bw, hf, fc, overallHeight }: {
   const flangeX = 45;
   const flangeW = 185;
   const webW = Math.max(44, flangeW * bw / r.beff);
-  const webX = flangeX + (flangeW - webW) / 2;
+  const webX = shape === "L" ? flangeX : flangeX + (flangeW - webW) / 2;
   const webBottom = top + height;
   const flangeBottom = y(hf);
   const naY = y(r.c);
@@ -36,7 +36,8 @@ export function TBeamAnalysisDiagram({ result: r, bw, hf, fc, overallHeight }: {
   const barsAt = (count: number) => count === 1 ? [webX + webW / 2] :
     Array.from({ length: count }, (_, index) => webX + 7 + index * (webW - 14) / (count - 1));
   const barRadius = Math.min(3.5, webW / (2 * Math.max(2, ...layers.map((layer) => layer.barCount))));
-  const title = r.compressionLayers.length ? "Doubly reinforced T-beam section analysis" : "Singly reinforced T-beam section analysis";
+  const beamLabel = shape === "L" ? "L-beam" : "T-beam";
+  const title = r.compressionLayers.length ? `Doubly reinforced ${beamLabel} section analysis` : `Singly reinforced ${beamLabel} section analysis`;
 
   return <DiagramFrame title={title} legend={<>
     <DiagramLegend color={barBlue} label="Reinforcing bars" dot />

@@ -14,6 +14,7 @@ interface TBeamCrossSectionProps {
   stirrup: number;
   tensionLayers: TBeamSteelLayerResult[];
   compressionLayers: TBeamSteelLayerResult[];
+  shape?: "T" | "L";
 }
 
 const BLUE = "#60bfff";
@@ -22,6 +23,7 @@ const DIMENSION = "var(--text-muted)";
 export function TBeamCrossSection({
   beff, bw, hf, d, a, ok, barDiameter, sectionCase,
   cover, stirrup, tensionLayers, compressionLayers,
+  shape = "T",
 }: TBeamCrossSectionProps) {
   // The design accepts d rather than h; infer only the bottom cover extension for the sketch.
   const inferredHeight = d + cover + stirrup + barDiameter / 2;
@@ -30,8 +32,8 @@ export function TBeamCrossSection({
   const flangeWidth = 290;
   const height = 296;
   const bottom = top + height;
-  const center = left + flangeWidth / 2;
   const webWidth = Math.max(90, flangeWidth * bw / beff);
+  const center = shape === "L" ? left + webWidth / 2 : left + flangeWidth / 2;
   const webLeft = center - webWidth / 2;
   const webRight = center + webWidth / 2;
   const sx = webWidth / bw;
@@ -68,7 +70,7 @@ export function TBeamCrossSection({
 
   return (
     <svg viewBox="0 0 500 430" className="mt-2 block h-auto w-full"
-      role="img" aria-label="T-beam section with adopted reinforcement, stirrup envelope, and compression-block depth a">
+       role="img" aria-label={`${shape}-beam section with adopted reinforcement, stirrup envelope, and compression-block depth a`}>
       <defs>
         <marker id="t-design-arrow" markerWidth="7" markerHeight="7" refX="3.5"
           refY="3.5" orient="auto-start-reverse">
@@ -149,7 +151,7 @@ export function TBeamCrossSection({
       <text x={left - 9} y={(top + flangeBottom) / 2} textAnchor="end"
         fill={DIMENSION} fontSize="10">hf = {hf.toFixed(0)}</text>
       <text x="250" y="425" textAnchor="middle" fill={DIMENSION} fontSize="9">
-        Section depth is inferred from d and bottom cover; bars follow the adopted row depths.
+        {shape === "L" ? "One-sided flange shown; " : ""}Section depth is inferred from d and bottom cover; bars follow the adopted row depths.
       </text>
     </svg>
   );

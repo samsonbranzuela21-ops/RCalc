@@ -78,6 +78,33 @@ test("given T flange width works without span or neighboring web spacing", () =>
   assert.throws(() => designTBeam({ ...input, bf: 299 }), /bf.*bw/i);
 });
 
+test("L design uses the shared design workflow with one-sided flange limits", () => {
+  const input = { ...base, shape: "L", Mu: 150, hf: 120, span: 6000,
+    clearSpacingLeft: 2700, clearSpacingRight: undefined };
+  const result = designTBeam(input);
+  const expectedOverhang = Math.min(6000 / 12, 6 * 120, 2700 / 2);
+
+  close(result.leftOverhang, expectedOverhang);
+  assert.equal(result.rightOverhang, null);
+  close(result.beff, 300 + expectedOverhang);
+  assert.equal(result.designStatus, "PASS");
+  const steps = getTBeamSolutionSteps(input, result);
+  assert.equal(steps[0].label, "Effective one-sided overhang");
+  assert.ok(steps.some((step) => step.label === "Selected bar areas and counts"));
+  for (const step of steps) for (const math of [step.formula, step.substitution, step.result].filter(Boolean)) {
+    assert.doesNotThrow(() => katex.renderToString(math, { throwOnError: true }), step.label);
+  }
+});
+
+test("L design accepts given bf without span or spacing", () => {
+  const input = { Mu: 150, shape: "L", bw: 300, hf: 120, d: 550, fc: 28, fy: 420,
+    Es: 200000, barDiameter: 25, compressionBarDiameter: 20, flangeWidthMode: "given", bf: 950 };
+  const result = designTBeam(input);
+  assert.equal(result.flangeWidthMode, "given");
+  close(result.beff, 950);
+  assert.equal(getTBeamSolutionSteps(input, result)[0].label, "Given effective flange width");
+});
+
 test("given flange width also feeds the doubly reinforced design and manual solution", () => {
   const input = { ...base, flangeWidthMode: "given", bf: 600,
     span: undefined, clearSpacingLeft: undefined, clearSpacingRight: undefined };

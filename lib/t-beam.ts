@@ -1,4 +1,5 @@
 export interface TBeamDesignInput {
+  shape?: "T" | "L";
   Mu: number; // factored moment, kN-m
   bw: number; // web width, mm
   hf: number; // flange thickness, mm
@@ -128,6 +129,27 @@ export function getEffectiveFlangeWidth(
   };
 }
 
+export function getLEffectiveFlangeWidth(
+  span: number,
+  bw: number,
+  hf: number,
+  clearSpacing: number
+) {
+  const spanLimit = span / 12;
+  const thicknessLimit = 6 * hf;
+  const spacingLimit = clearSpacing / 2;
+  const effectiveOverhang = Math.min(spanLimit, thicknessLimit, spacingLimit);
+  return {
+    beff: bw + effectiveOverhang,
+    leftOverhang: effectiveOverhang,
+    rightOverhang: null,
+    spanLimit,
+    thicknessLimit,
+    leftSpacingLimit: spacingLimit,
+    rightSpacingLimit: null,
+  };
+}
+
 function getPhi(epsilonT: number, fy: number, Es = ES): number {
   const epsilonY = fy / Es;
 
@@ -241,6 +263,7 @@ function designTBeamSingly(input: TBeamDesignInput): TBeamDesignResult {
   const dPrime = clearCover + stirrupDiameter + compressionBarDiameter / 2;
   const beta1 = getBeta1(fc);
   const flangeWidthMode = input.flangeWidthMode ?? "calculated";
+  const shape = input.shape ?? "T";
 
   if (
     ![Mu, bw, hf, d, fc, fy, barDiameter, Es, clearCover,
@@ -272,7 +295,7 @@ function designTBeamSingly(input: TBeamDesignInput): TBeamDesignResult {
     if (!Number.isFinite(input.clearSpacingLeft) || input.clearSpacingLeft! <= 0) {
       throw new Error("Enter a positive left-side clear spacing to the adjacent web.");
     }
-    if (!Number.isFinite(input.clearSpacingRight) || input.clearSpacingRight! <= 0) {
+    if (shape === "T" && (!Number.isFinite(input.clearSpacingRight) || input.clearSpacingRight! <= 0)) {
       throw new Error("Enter a positive right-side clear spacing to the adjacent web.");
     }
   }
@@ -282,8 +305,10 @@ function designTBeamSingly(input: TBeamDesignInput): TBeamDesignResult {
         leftOverhang: null, rightOverhang: null, spanLimit: null,
         thicknessLimit: null, leftSpacingLimit: null, rightSpacingLimit: null,
       }
-    : getEffectiveFlangeWidth(input.span!, bw, hf,
-        input.clearSpacingLeft!, input.clearSpacingRight!);
+    : shape === "L"
+      ? getLEffectiveFlangeWidth(input.span!, bw, hf, input.clearSpacingLeft!)
+      : getEffectiveFlangeWidth(input.span!, bw, hf,
+          input.clearSpacingLeft!, input.clearSpacingRight!);
   const { beff } = flange;
 
   const asMin = Math.max(
@@ -576,7 +601,7 @@ export function designTBeam(input: TBeamDesignInput): TBeamDesignResult {
     }
   }
   if (!selected) {
-    throw new Error("No T-beam tension/compression bar arrangement within three web layers meets the target strain and moment. Increase bw or d, or revise the bar sizes.");
+    throw new Error(`No ${input.shape === "L" ? "L" : "T"}-beam tension/compression bar arrangement within three web layers meets the target strain and moment. Increase bw or d, or revise the bar sizes.`);
   }
   const capacity = selected;
   const tensionPerLayer = Math.min(selectedTensionBars, maxTensionPerLayer);
@@ -591,7 +616,7 @@ export function designTBeam(input: TBeamDesignInput): TBeamDesignResult {
     sectionType: "doubly",
     ok: true,
     designStatus: "PASS",
-    message: "Doubly reinforced T-beam design passes after strain-compatible verification of the selected bars.",
+    message: `Doubly reinforced ${input.shape === "L" ? "L" : "T"}-beam design passes after strain-compatible verification of the selected bars.`,
     barsRequired: selectedTensionBars,
     barsPerLayer: tensionPerLayer,
     numberOfLayers,
@@ -627,6 +652,23 @@ export function getTBeamSolutionSteps(
       substitution: "b_f=" + n(result.beff) + "\\;\\mathrm{mm}",
       result: "b_f=" + n(result.beff) + "\\;\\mathrm{mm}\\ge b_w=" + n(input.bw) + "\\;\\mathrm{mm}",
     });
+  } else if ((input.shape ?? "T") === "L") {
+    steps.push(
+      {
+        label: "Effective one-sided overhang",
+        formula: "b_o=\\min(\\ell_n/12,6h_f,s_w/2)",
+        substitution: "b_o=\\min(" + n(input.span!) + "/12,6(" + n(input.hf) +
+          ")," + n(input.clearSpacingLeft!) + "/2)",
+        result: "b_o=\\min(" + n(result.spanLimit!) + "," + n(result.thicknessLimit!) +
+          "," + n(result.leftSpacingLimit!) + ")=" + n(result.leftOverhang!) + "\\;\\mathrm{mm}",
+      },
+      {
+        label: "Effective flange width",
+        formula: "b_f=b_w+b_o",
+        substitution: "b_f=" + n(input.bw) + "+" + n(result.leftOverhang!),
+        result: "b_f=" + n(result.beff) + "\\;\\mathrm{mm}",
+      },
+    );
   } else {
     const spanLimit = result.spanLimit!;
     const thicknessLimit = result.thicknessLimit!;
