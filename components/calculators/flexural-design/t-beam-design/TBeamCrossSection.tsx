@@ -1,300 +1,174 @@
+import { DiagramSurface } from "@/components/shared/DiagramFrame";
+import type { TBeamSteelLayerResult } from "@/lib/t-beam";
+
 interface TBeamCrossSectionProps {
   beff: number;
   bw: number;
   hf: number;
   d: number;
   a: number;
+  ok: boolean;
   barDiameter: number;
-  barsRequired: number;
-  barsPerLayer: number;
   sectionCase: "flange" | "web";
-  compressionBarsRequired: number;
-  compressionBarsPerLayer: number;
-  compressionBarDiameter: number;
-  dPrime: number;
+  cover: number;
+  stirrup: number;
+  tensionLayers: TBeamSteelLayerResult[];
+  compressionLayers: TBeamSteelLayerResult[];
 }
 
-function distributeBars(total: number, maximumPerLayer = 8): number[] {
-  const layers: number[] = [];
-  let remaining = total;
-
-  while (remaining > 0) {
-    const count = Math.min(maximumPerLayer, remaining);
-    layers.push(count);
-    remaining -= count;
-  }
-
-  return layers;
-}
+const BLUE = "#60bfff";
+const DIMENSION = "var(--text-muted)";
 
 export function TBeamCrossSection({
-  beff,
-  bw,
-  hf,
-  d,
-  a,
-  barDiameter,
-  barsRequired,
-  barsPerLayer,
-  sectionCase,
-  compressionBarsRequired,
-  compressionBarsPerLayer,
-  compressionBarDiameter,
-  dPrime,
+  beff, bw, hf, d, a, ok, barDiameter, sectionCase,
+  cover, stirrup, tensionLayers, compressionLayers,
 }: TBeamCrossSectionProps) {
-  const flangeWidth = 230;
-  const webWidth = Math.max(54, Math.min(100, (bw / beff) * flangeWidth));
-  const flangeHeight = Math.max(28, Math.min(58, (hf / d) * 230));
-  const sectionTop = 42;
-  const sectionHeight = 238;
-  const webTop = sectionTop + flangeHeight;
-  const webBottom = sectionTop + sectionHeight;
-  const flangeLeft = 46;
-  const flangeRight = flangeLeft + flangeWidth;
-  const centerX = flangeLeft + flangeWidth / 2;
-  const webLeft = centerX - webWidth / 2;
-  const webRight = centerX + webWidth / 2;
-  const effectiveDepthY = sectionTop + 0.88 * sectionHeight;
-  const compressionDepth = Math.min(
-    sectionHeight,
-    Math.max(3, (a / d) * (effectiveDepthY - sectionTop))
-  );
-  const compressionBottom = sectionTop + compressionDepth;
-  const barLayers = distributeBars(barsRequired, barsPerLayer);
-  const compressionLayers = compressionBarsRequired > 0
-    ? distributeBars(compressionBarsRequired, compressionBarsPerLayer)
-    : [];
-  const barRadius = Math.max(3.2, Math.min(5.5, barDiameter / 5));
-  const compressionRadius = Math.max(3.2, Math.min(5.5, compressionBarDiameter / 5));
+  // The design accepts d rather than h; infer only the bottom cover extension for the sketch.
+  const inferredHeight = d + cover + stirrup + barDiameter / 2;
+  const left = 105;
+  const top = 62;
+  const flangeWidth = 290;
+  const height = 296;
+  const bottom = top + height;
+  const center = left + flangeWidth / 2;
+  const webWidth = Math.max(90, flangeWidth * bw / beff);
+  const webLeft = center - webWidth / 2;
+  const webRight = center + webWidth / 2;
+  const sx = webWidth / bw;
+  const sy = height / inferredHeight;
+  const toY = (depth: number) => top + depth * sy;
+  const flangeBottom = toY(hf);
+  const blockBottom = toY(Math.min(a, inferredHeight));
+  const tensionArea = tensionLayers.reduce((sum, layer) => sum + layer.area, 0);
+  const tensionCentroid = tensionLayers.reduce((sum, layer) =>
+    sum + layer.area * layer.depth, 0) / tensionArea;
+  const compressionArea = compressionLayers.reduce((sum, layer) => sum + layer.area, 0);
+  const compressionCentroid = compressionArea > 0
+    ? compressionLayers.reduce((sum, layer) => sum + layer.area * layer.depth, 0) / compressionArea
+    : null;
+  const insideLeft = webLeft + (cover + stirrup) * sx;
+  const insideRight = webRight - (cover + stirrup) * sx;
+  const envelopeTop = toY(cover + stirrup / 2);
+  const envelopeBottom = toY(inferredHeight - cover - stirrup / 2);
+
+  function drawBars(layers: TBeamSteelLayerResult[], role: string) {
+    return layers.flatMap((layer, layerIndex) => {
+      const radius = Math.max(4.5, Math.min(7.5, layer.diameter * sx / 2));
+      const first = insideLeft + layer.diameter * sx / 2;
+      const last = insideRight - layer.diameter * sx / 2;
+      return Array.from({ length: layer.barCount }, (_, index) => {
+        const x = layer.barCount === 1 ? center :
+          first + (last - first) * index / (layer.barCount - 1);
+        return <circle key={role + "-" + layerIndex + "-" + index}
+          cx={x} cy={toY(layer.depth)} r={radius}
+          fill={BLUE} stroke="var(--bg)" strokeWidth="1.5" />;
+      });
+    });
+  }
 
   return (
-    <div className="flex flex-col items-center overflow-x-auto rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] p-3 sm:p-4">
-      <svg
-        viewBox="0 0 360 340"
-        className="min-w-[330px] w-full max-w-[430px]"
-        role="img"
-        aria-label="T-beam cross-section with effective flange, web, compression block, and tension and compression reinforcement"
-      >
-        <defs>
-          <marker
-            id="tbeam-dimension-arrow"
-            markerWidth="7"
-            markerHeight="7"
-            refX="3.5"
-            refY="3.5"
-            orient="auto-start-reverse"
-          >
-            <path d="M0,3.5 L7,0 L7,7 Z" fill="var(--text-muted)" />
-          </marker>
-          <pattern
-            id="tbeam-compression-hatch"
-            width="6"
-            height="6"
-            patternUnits="userSpaceOnUse"
-            patternTransform="rotate(45)"
-          >
-            <rect width="6" height="6" fill="#f5941f" fillOpacity="0.14" />
-            <line
-              x1="0"
-              y1="0"
-              x2="0"
-              y2="6"
-              stroke="#f5941f"
-              strokeOpacity="0.65"
-              strokeWidth="1"
-            />
-          </pattern>
-        </defs>
+    <svg viewBox="0 0 500 430" className="mt-2 block h-auto w-full"
+      role="img" aria-label="T-beam section with adopted reinforcement, stirrup envelope, and compression-block depth a">
+      <defs>
+        <marker id="t-design-arrow" markerWidth="7" markerHeight="7" refX="3.5"
+          refY="3.5" orient="auto-start-reverse">
+          <path d="M0,0 L7,3.5 L0,7 z" fill={DIMENSION} />
+        </marker>
+        <marker id="t-design-a-arrow" markerWidth="7" markerHeight="7" refX="3.5"
+          refY="3.5" orient="auto-start-reverse">
+          <path d="M0,0 L7,3.5 L0,7 z" fill="#f5941f" />
+        </marker>
+      </defs>
+      <DiagramSurface width={500} height={430} />
+      {sectionCase === "flange" ? (
+        <rect x={left} y={top} width={flangeWidth} height={Math.max(0, blockBottom - top)}
+          fill="#f5941f" fillOpacity="0.13" />
+      ) : (
+        <>
+          <rect x={left} y={top} width={flangeWidth} height={flangeBottom - top}
+            fill="#f5941f" fillOpacity="0.13" />
+          <rect x={webLeft} y={flangeBottom} width={webWidth}
+            height={Math.max(0, blockBottom - flangeBottom)}
+            fill="#f5941f" fillOpacity="0.13" />
+        </>
+      )}
+      <path d={"M " + left + " " + top + " H " + (left + flangeWidth) +
+        " V " + flangeBottom + " H " + webRight + " V " + bottom +
+        " H " + webLeft + " V " + flangeBottom + " H " + left + " Z"}
+        fill="none" stroke="var(--text)" strokeWidth="2.5" strokeLinejoin="round" />
+      <path d={"M " + (webLeft + (cover + stirrup / 2) * sx) + " " + envelopeTop +
+        " H " + (webRight - (cover + stirrup / 2) * sx) +
+        " V " + envelopeBottom + " H " +
+        (webLeft + (cover + stirrup / 2) * sx) + " Z"}
+        fill="none" stroke={DIMENSION} strokeDasharray="6 5" strokeWidth="1.4" />
 
-        {/* Effective flange width dimension */}
-        <line
-          x1={flangeLeft}
-          y1="22"
-          x2={flangeRight}
-          y2="22"
-          stroke="var(--text-muted)"
-          strokeWidth="1"
-          markerStart="url(#tbeam-dimension-arrow)"
-          markerEnd="url(#tbeam-dimension-arrow)"
-        />
-        <line x1={flangeLeft} y1="27" x2={flangeLeft} y2={sectionTop} stroke="var(--text-muted)" />
-        <line x1={flangeRight} y1="27" x2={flangeRight} y2={sectionTop} stroke="var(--text-muted)" />
-        <text x={centerX} y="15" textAnchor="middle" fontSize="10" fill="var(--text-muted)">
-          bₑ = {beff.toFixed(0)} mm
-        </text>
+      {ok && <><line x1={webLeft - 12} y1={toY(tensionCentroid)}
+        x2={webRight + 12} y2={toY(tensionCentroid)}
+        stroke={BLUE} strokeDasharray="5 5" strokeWidth="1.5" />
+        <text x={webLeft - 18} y={toY(tensionCentroid) + 4}
+          textAnchor="end" fill={BLUE} fontSize="10" fontWeight="600"
+          paintOrder="stroke" stroke="var(--bg)" strokeWidth="4"
+          strokeLinejoin="round">tension-steel centroid</text></>}
+      {ok && compressionCentroid !== null && <>
+        <line x1={webLeft - 12} y1={toY(compressionCentroid)}
+          x2={webRight + 12} y2={toY(compressionCentroid)}
+          stroke={BLUE} strokeDasharray="5 5" strokeWidth="1.5" />
+        <text x={webLeft - 18} y={toY(compressionCentroid) + 4}
+          textAnchor="end" fill={BLUE} fontSize="10" fontWeight="600"
+          paintOrder="stroke" stroke="var(--bg)" strokeWidth="4"
+          strokeLinejoin="round">compression-steel centroid</text>
+      </>}
 
-        {/* T-beam outline */}
-        <path
-          d={`M ${flangeLeft} ${sectionTop}
-              H ${flangeRight}
-              V ${webTop}
-              H ${webRight}
-              V ${webBottom}
-              H ${webLeft}
-              V ${webTop}
-              H ${flangeLeft}
-              Z`}
-          fill="none"
-          stroke="var(--text)"
-          strokeWidth="2"
-        />
+      {ok ? <>
+        {drawBars(tensionLayers, "tension")}
+        {drawBars(compressionLayers, "compression")}
+      </> : <text x={center} y={top + height * 0.6}
+        textAnchor="middle" fill={DIMENSION} fontSize="11">No feasible bar layout</text>}
 
-        {/* Equivalent rectangular compression block */}
-        {sectionCase === "flange" ? (
-          <rect
-            x={flangeLeft}
-            y={sectionTop}
-            width={flangeWidth}
-            height={compressionDepth}
-            fill="url(#tbeam-compression-hatch)"
-          />
-        ) : (
-          <>
-            <rect
-              x={flangeLeft}
-              y={sectionTop}
-              width={flangeWidth}
-              height={flangeHeight}
-              fill="url(#tbeam-compression-hatch)"
-            />
-            <rect
-              x={webLeft}
-              y={webTop}
-              width={webWidth}
-              height={Math.max(0, compressionBottom - webTop)}
-              fill="url(#tbeam-compression-hatch)"
-            />
-          </>
-        )}
-
-        {/* Compression-block depth a */}
-        <line
-          x1={flangeRight + 18}
-          y1={sectionTop}
-          x2={flangeRight + 18}
-          y2={compressionBottom}
-          stroke="#f5941f"
-          strokeWidth="1"
-          markerStart="url(#tbeam-dimension-arrow)"
-          markerEnd="url(#tbeam-dimension-arrow)"
-        />
-        <text
-          x={flangeRight + 26}
-          y={(sectionTop + compressionBottom) / 2 + 3}
-          fontSize="10"
-          fill="#f5941f"
-        >
-          a = {a.toFixed(1)} mm
-        </text>
-
-        {/* Flange thickness */}
-        <line
-          x1={flangeLeft - 15}
-          y1={sectionTop}
-          x2={flangeLeft - 15}
-          y2={webTop}
-          stroke="var(--text-muted)"
-          strokeWidth="1"
-          markerStart="url(#tbeam-dimension-arrow)"
-          markerEnd="url(#tbeam-dimension-arrow)"
-        />
-        <text
-          x={flangeLeft - 20}
-          y={(sectionTop + webTop) / 2 + 3}
-          textAnchor="end"
-          fontSize="9"
-          fill="var(--text-muted)"
-        >
-          hₑ = {hf.toFixed(0)}
-        </text>
-
-        {/* Effective depth */}
-        <line
-          x1="15"
-          y1={sectionTop}
-          x2="15"
-          y2={effectiveDepthY}
-          stroke="var(--text-muted)"
-          strokeWidth="1"
-          markerStart="url(#tbeam-dimension-arrow)"
-          markerEnd="url(#tbeam-dimension-arrow)"
-        />
-        <text
-          x="10"
-          y={(sectionTop + effectiveDepthY) / 2}
-          textAnchor="end"
-          fontSize="9"
-          fill="var(--text-muted)"
-        >
-          d = {d.toFixed(0)}
-        </text>
-
-        {/* Web-width dimension */}
-        <line
-          x1={webLeft}
-          y1={webBottom + 20}
-          x2={webRight}
-          y2={webBottom + 20}
-          stroke="var(--text-muted)"
-          strokeWidth="1"
-          markerStart="url(#tbeam-dimension-arrow)"
-          markerEnd="url(#tbeam-dimension-arrow)"
-        />
-        <text
-          x={centerX}
-          y={webBottom + 36}
-          textAnchor="middle"
-          fontSize="9"
-          fill="var(--text-muted)"
-        >
-          bₓ = {bw.toFixed(0)} mm
-        </text>
-
-        {/* Tension reinforcement; count follows the calculator result */}
-        {compressionLayers.map((count, layerIndex) => {
-          const layerDepth = dPrime + layerIndex * (compressionBarDiameter + 25);
-          const layerY = sectionTop + (layerDepth / d) * (effectiveDepthY - sectionTop);
-          const inset = compressionRadius + 3;
-          const usableWidth = Math.max(0, webWidth - 2 * inset);
-          return Array.from({ length: count }, (_, index) => {
-            const x = count === 1 ? centerX : webLeft + inset + index * usableWidth / (count - 1);
-            return <circle key={"compression-" + layerIndex + "-" + index}
-              cx={x} cy={layerY} r={compressionRadius} fill="#6db6ff"
-              stroke="var(--bg)" strokeWidth="1" />;
-          });
-        })}
-        {barLayers.map((count, layerIndex) => {
-          const layerY = effectiveDepthY - layerIndex * (barRadius * 2 + 7);
-          const usableWidth = Math.max(8, webWidth - 18);
-
-          return Array.from({ length: count }, (_, index) => {
-            const x =
-              count === 1
-                ? centerX
-                : webLeft + 9 + (index * usableWidth) / (count - 1);
-
-            return (
-              <circle
-                key={`${layerIndex}-${index}`}
-                cx={x}
-                cy={layerY}
-                r={barRadius}
-                fill="#f5941f"
-                stroke="var(--bg)"
-                strokeWidth="1"
-              />
-            );
-          });
-        })}
-
-        <text x={webRight + 12} y={effectiveDepthY + 4} fontSize="10" fill="#f5941f">
-          Aₛ: {barsRequired}-ϕ{barDiameter}
-        </text>
-
-        <text x={centerX} y="333" textAnchor="middle" fontSize="10" fill="var(--text-muted)">
-          T-beam section — schematic, not to scale
-        </text>
-      </svg>
-    </div>
+      <Dimension x1={left} y1={32} x2={left + flangeWidth} y2={32}
+        label={"bf = " + beff.toFixed(0) + " mm"} />
+      <Dimension x1={68} y1={top} x2={68} y2={bottom}
+        label={"h ≈ " + inferredHeight.toFixed(0) + " mm"} vertical />
+      <Dimension x1={432} y1={top} x2={432} y2={toY(d)}
+        label={"d = " + d.toFixed(0) + " mm"} vertical />
+      {blockBottom - top >= 28 ? (
+        <Dimension x1={406} y1={top} x2={406} y2={blockBottom}
+          label="" vertical color="#f5941f" />
+      ) : (
+        <g stroke="#f5941f" strokeWidth="1.5">
+          <line x1={406} y1={top} x2={406} y2={blockBottom} />
+          <line x1={401} y1={top} x2={411} y2={top} />
+          <line x1={401} y1={blockBottom} x2={411} y2={blockBottom} />
+        </g>
+      )}
+      <text x={405} y={52} fill="#f5941f" fontSize="11" fontWeight="600">
+        a = {a.toFixed(1)} mm
+      </text>
+      <Dimension x1={webLeft} y1={402} x2={webRight} y2={402}
+        label={"bw = " + bw.toFixed(0) + " mm"} />
+      <text x={left - 9} y={(top + flangeBottom) / 2} textAnchor="end"
+        fill={DIMENSION} fontSize="10">hf = {hf.toFixed(0)}</text>
+      <text x="250" y="425" textAnchor="middle" fill={DIMENSION} fontSize="9">
+        Section depth is inferred from d and bottom cover; bars follow the adopted row depths.
+      </text>
+    </svg>
   );
+}
+
+function Dimension({ x1, y1, x2, y2, label, vertical = false, color = DIMENSION }: {
+  x1: number; y1: number; x2: number; y2: number; label: string;
+  vertical?: boolean; color?: string;
+}) {
+  const labelX = x1 - 9;
+  const labelY = (y1 + y2) / 2;
+  return <g>
+    <line x1={x1} y1={y1} x2={x2} y2={y2} stroke={color} strokeWidth="1"
+      markerStart={color === "#f5941f" ? "url(#t-design-a-arrow)" : "url(#t-design-arrow)"}
+      markerEnd={color === "#f5941f" ? "url(#t-design-a-arrow)" : "url(#t-design-arrow)"} />
+    {label && vertical ? <text x={labelX} y={labelY} textAnchor="middle" fill={color}
+      fontSize="10" transform={"rotate(-90 " + labelX + " " + labelY + ")"}>
+      {label}
+    </text> : label ? <text x={(x1 + x2) / 2} y={y1 - 8}
+      textAnchor="middle" fill={color} fontSize="10">{label}</text> : null}
+  </g>;
 }

@@ -214,6 +214,44 @@ test("layered T beam solves flange and web cases with per-layer equilibrium and 
   }
 });
 
+test("doubly T-beam manual solution follows the eight capacity-analysis stages", () => {
+  for (const bars of [4, 18]) {
+    const input = { ...common, shape: "T", tensionLayers: [{ barCount: bars, barDiameter: 25, depth: 550 }],
+      compressionLayers: [{ barCount: 2, barDiameter: 16, depth: 60 }] };
+    const result = analyzeFlangedBeam(input);
+    const steps = getFlangedBeamAnalysisSteps(input, result);
+    const labels = steps.map((step) => step.label);
+    const ordered = ["1. Compression-block assumption", "2. Steel-state assumptions",
+      "3. Trial compatible steel stresses", "4. Solve force equilibrium",
+      "5. Verify compression-block and steel assumptions", "6. Nominal moment from every force about the top face",
+      "7. Strength-reduction factor", "8. Design moment capacity"];
+    for (let i = 0; i < ordered.length; i += 1) {
+      assert.ok(labels.includes(ordered[i]), ordered[i]);
+      if (i > 0) assert.ok(labels.indexOf(ordered[i]) > labels.indexOf(ordered[i - 1]));
+    }
+    assert.match(steps.find((step) => step.label === ordered[3]).formula, /C_c/);
+    assert.match(steps.find((step) => step.label === ordered[4]).result, /flange|web/);
+    for (const step of steps) for (const math of [step.formula, step.substitution, step.result].filter(Boolean)) {
+      assert.doesNotThrow(() => katex.renderToString(math, { throwOnError: true }), step.label);
+    }
+  }
+});
+
+test("doubly manual solution identifies elastic top bars in tension and leaves singly stages alone", () => {
+  const doublyInput = { ...common, shape: "T", flangeWidthMode: "given", bf: 1500,
+    tensionLayers: [{ barCount: 1, barDiameter: 12, depth: 550 }],
+    compressionLayers: [{ barCount: 5, barDiameter: 36, depth: 110 }] };
+  const doubly = analyzeFlangedBeam(doublyInput);
+  const checks = getFlangedBeamAnalysisSteps(doublyInput, doubly);
+  const top = checks.find((step) => step.label === "5a. Top layer 1: final state check");
+  assert.ok(top);
+  assert.match(top.result, /tension, elastic/);
+  const singlyInput = { ...common, shape: "T" };
+  const singlySteps = getFlangedBeamAnalysisSteps(singlyInput, analyzeFlangedBeam(singlyInput));
+  assert.ok(!singlySteps.some((step) => /^[1-8]\. /.test(step.label)));
+  assert.ok(singlySteps.some((step) => step.label === "Strength reduction factor and design capacity"));
+});
+
 test("T beam rejects compression steel below the tension steel", () => {
   const input = { ...common, shape: "T", compressionLayers: [{ barCount: 2, barDiameter: 16, depth: 560 }] };
   assert.throws(() => analyzeFlangedBeam(input), /compression steel above the tension steel/);

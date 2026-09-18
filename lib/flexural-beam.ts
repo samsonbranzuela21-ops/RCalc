@@ -1261,30 +1261,51 @@ function designDoublyReinforced(
     : input.cover + input.stirrupDiameter + input.compressionBarDiameter / 2;
   const epsilonTDesign = input.targetTensionStrain ?? EPSILON_TENSION_CONTROLLED;
   const phiDesign = phiFromTensionStrain(epsilonTDesign, input.fy / input.Es);
-  const cDesign = (EPSILON_CU * initialD) / (EPSILON_CU + epsilonTDesign);
-  const aDesign = beta1 * cDesign;
+  let cDesign = (EPSILON_CU * initialD) / (EPSILON_CU + epsilonTDesign);
+  let aDesign = beta1 * cDesign;
   let as1 = (0.85 * input.fc * input.b * aDesign) / input.fy;
   let designRatioCapApplied = false;
   if (as1 / (input.b * initialD) > RHO_MAX) {
     as1 = RHO_MAX * input.b * initialD;
     designRatioCapApplied = true;
+    aDesign = as1 * input.fy / (0.85 * input.fc * input.b);
+    cDesign = aDesign / beta1;
   }
-  const mn1 = as1 * input.fy * (initialD - aDesign / 2) / 1e6;
   const mnRequired = input.Mu / phiDesign;
+  let mn1 = as1 * input.fy * (initialD - aDesign / 2) / 1e6;
+  if (mn1 >= mnRequired) {
+    // A strength-sufficient Beam 1 can still have an undetailable singly layout.
+    // Reserve a small positive moment for the steel couple and re-solve Beam 1.
+    const beam1Target = 0.95 * mnRequired;
+    const radicand = initialD ** 2 - 2 * beam1Target * 1e6 /
+      (0.85 * input.fc * input.b);
+    if (radicand > 0) {
+      aDesign = initialD - Math.sqrt(radicand);
+      cDesign = aDesign / beta1;
+      as1 = 0.85 * input.fc * input.b * aDesign / input.fy;
+      mn1 = as1 * input.fy * (initialD - aDesign / 2) / 1e6;
+    }
+  }
   const mn2 = mnRequired - mn1;
   const epsilonSPrimeDesign = EPSILON_CU * (cDesign - dPrimeTrial) / cDesign;
   const fsPrimeDesign = clamp(epsilonSPrimeDesign * input.Es, -input.fy, input.fy);
+  const fsPrimeNetDesign = fsPrimeDesign - (dPrimeTrial <= aDesign ? 0.85 * input.fc : 0);
   const as2 = mn2 > 0 && initialD > dPrimeTrial
     ? (mn2 * 1e6) / (input.fy * (initialD - dPrimeTrial))
     : 0;
-  const asCompression = as2 > 0 && fsPrimeDesign > 0
-    ? (as2 * input.fy) / fsPrimeDesign
+  const asCompression = as2 > 0 && fsPrimeNetDesign > 0
+    ? (as2 * input.fy) / fsPrimeNetDesign
     : Number.NaN;
   const asTotal = as1 + as2;
   const firstCompressionCount = Number.isFinite(asCompression)
     ? Math.max(1, Math.ceil(asCompression / steelArea(input.compressionBarDiameter)))
     : 0;
-  const startTensionCount = Math.max(firstTensionCount, Math.ceil(asTotal / steelArea(input.barDiameter)));
+  // The failed singly trial is not a lower bound once the compression-steel couple is added.
+  const startTensionCount = Math.max(1, Math.ceil(asTotal / steelArea(input.barDiameter)));
+  const maximumTensionBars = reinforcementLayoutCapacity(input, input.barDiameter,
+    minimumTensionSpacing(input)).maximumTotalBars;
+  const maximumCompressionBars = reinforcementLayoutCapacity(input, input.compressionBarDiameter,
+    minimumCompressionSpacing(input)).maximumTotalBars;
   const iterationRows = [...previousRows];
   let iterationCount = previousIterations;
 
@@ -1292,7 +1313,7 @@ function designDoublyReinforced(
     return failureResult(
       input,
       base,
-      "The singly-reinforced trial already reaches the required nominal moment, but its selected bar arrangement failed a geometry or spacing check. A compression-steel couple cannot repair that bar-layout failure; change b, h, cover, stirrup size, aggregate size, or bar diameter.",
+      "No positive moment remains for a compression-steel couple after the Beam 1 trial; revise the section or bar size.",
       iterationRows,
       iterationCount,
     );
@@ -1306,23 +1327,24 @@ function designDoublyReinforced(
       iterationCount,
     );
   }
-  if (!(fsPrimeDesign > 0) || !Number.isFinite(asCompression)) {
+  if (!(fsPrimeNetDesign > 0) || !Number.isFinite(asCompression)) {
     return failureResult(
       input,
       base,
-      "The compression steel has no positive compression stress in the design-strain trial, so the superposition compression area is not defined. Revise d′ or the section geometry.",
+      "The compression steel has no positive net compression force in the design-strain trial after displaced concrete is considered. Revise d′ or the section geometry.",
       iterationRows,
       iterationCount,
     );
   }
+  if (startTensionCount > maximumTensionBars || firstCompressionCount > maximumCompressionBars) {
+    return failureResult(input, base,
+      `The doubly reinforced area trial needs at least ${startTensionCount} bottom and ${firstCompressionCount} top bars, but the section can hold at most ${maximumTensionBars} bottom and ${maximumCompressionBars} top bars separately. Increase the section or bar sizes.`,
+      iterationRows, iterationCount);
+  }
   if (startTensionCount > 96 || firstCompressionCount > 96) {
-    return failureResult(
-      input,
-      base,
-      "Not adequate: the required bar count is beyond the supported layout range. Increase the beam size or revise the reinforcement size.",
-      iterationRows,
-      iterationCount,
-    );
+    return failureResult(input, base,
+      "The required bar count exceeds the supported 96-bar layout search; increase the section or bar sizes.",
+      iterationRows, iterationCount);
   }
 
   type DoubleCandidate = {
@@ -1339,6 +1361,7 @@ function designDoublyReinforced(
   };
   let selected: DoubleCandidate | null = null;
   let lastReason = "The doubly reinforced design did not converge to an adequate provided-bar arrangement.";
+  let strengthWouldPassButRatioFails = false;
 
   for (let extra = 0; extra <= MAX_DOUBLE_BAR_INCREMENTS && !selected; extra += 1) {
     const candidates: DoubleCandidate[] = [];
@@ -1346,7 +1369,8 @@ function designDoublyReinforced(
       const compressionExtra = extra - tensionExtra;
       const tensionCount = startTensionCount + tensionExtra;
       const compressionCount = firstCompressionCount + compressionExtra;
-      if (tensionCount > 96 || compressionCount > 96) continue;
+      if (tensionCount > Math.min(96, maximumTensionBars) ||
+        compressionCount > Math.min(96, maximumCompressionBars)) continue;
       iterationCount += 1;
       const tension = buildGroupLayout(input, tensionCount, "tension");
       const compression = buildGroupLayout(input, compressionCount, "compression");
@@ -1374,6 +1398,12 @@ function designDoublyReinforced(
       const rhoProvidedLimitOk = rhoProvided <= RHO_MAX + 1e-12;
       const analysis = analyzeSection(input, beta1, tension, compression);
       const compressionAllActuallyCompression = analysis.compressionLayers.every((layer) => layer.state === "compression");
+      if (analysis.valid && analysis.strainOk && analysis.equilibriumOk &&
+        analysis.phiMn !== null && analysis.phiMn + 1e-8 >= input.Mu &&
+        tension.area + 1e-8 >= asRequired && compression.area + 1e-8 >= asCompression &&
+        compressionAllActuallyCompression && (!rhoRequiredLimitOk || !rhoProvidedLimitOk)) {
+        strengthWouldPassButRatioFails = true;
+      }
       const adequate = analysis.valid && analysis.strainOk && analysis.equilibriumOk &&
         analysis.phiMn !== null && analysis.phiMn + 1e-8 >= input.Mu &&
         tension.area + 1e-8 >= asRequired && compression.area + 1e-8 >= asCompression &&
@@ -1431,7 +1461,9 @@ function designDoublyReinforced(
     return failureResult(
       input,
       base,
-      lastReason,
+      strengthWouldPassButRatioFails
+        ? "A doubly reinforced bar arrangement can carry Mu, but its required or provided reinforcement ratio exceeds ρmax=0.025 for the adopted special moment-frame limit. Increase section dimensions or revise project applicability."
+        : lastReason,
       iterationRows,
       iterationCount,
       {
@@ -1547,7 +1579,7 @@ function failureResult(
   iterationCount: number,
   partial: Partial<FlexuralBeamResult> = {},
 ): FlexuralBeamResult {
-  const failureType = classifyFailure(message, iterationRows);
+  const failureType = classifyFailure(message);
   const conciseMessage = failureSummary(failureType);
   return {
     ...base,
@@ -1567,12 +1599,12 @@ function failureResult(
 
 function classifyFailure(
   message: string,
-  iterationRows: FlexuralBeamResult["iterationRows"],
 ): Exclude<FlexuralFailureType, null> {
   const normalizedMessage = message.toLowerCase();
   if (normalizedMessage.includes("ρmax") || normalizedMessage.includes("reinforcement ratio")) return "reinforcement-limit";
   if (
-    iterationRows.some((row) => row.reason.includes("group needs")) ||
+    normalizedMessage.includes("group needs") ||
+    normalizedMessage.includes("section can hold") ||
     normalizedMessage.includes("fit inside the stirrups") ||
     normalizedMessage.includes("fit between the top and bottom cover") ||
     normalizedMessage.includes("geometry or spacing") ||
@@ -1663,8 +1695,14 @@ export function getDesignSolutionSteps(
   const designD = targetDesignLayout?.valid && targetDesignLayout.d !== null
     ? targetDesignLayout.d
     : trialD;
-  const cDesign = (EPSILON_CU * designD) / (EPSILON_CU + epsilonTDesign);
+  const targetCDesign = (EPSILON_CU * designD) / (EPSILON_CU + epsilonTDesign);
+  const cDesign = result.sectionType === "doubly" && result.asSinglyPortion !== null
+    ? result.asSinglyPortion * normalized.fy /
+      (0.85 * normalized.fc * normalized.b * result.beta1)
+    : targetCDesign;
   const aDesign = result.beta1 * cDesign;
+  const designDisplacedConcreteStress = designDPrime <= aDesign ? 0.85 * normalized.fc : 0;
+  const designNetCompressionStress = (result.fsPrimeDesign ?? 0) - designDisplacedConcreteStress;
   const tensionProvidedArea = result.tensionLayers.reduce((sum, layer) => sum + layer.area, 0);
   const compressionProvidedArea = result.compressionLayers.reduce((sum, layer) => sum + layer.area, 0);
   const minimumTensionBarCount = Number.isFinite(result.barsBeforeRounding)
@@ -1777,7 +1815,6 @@ export function getDesignSolutionSteps(
       reference: referenceStrength,
     });
   }
-
   steps.push({
     label: "Minimum tension reinforcement",
     formula: "\\rho_{min}=\\max\\left(\\dfrac{\\sqrt{f'_c}}{4f_y},\\dfrac{1.4}{f_y}\\right);\\quad A_{s,min}=\\rho_{min}bd",
@@ -1800,9 +1837,11 @@ export function getDesignSolutionSteps(
   if (result.sectionType === "doubly") {
     steps.push({
       label: "Doubly reinforced design strain and neutral axis",
-      formula: "c_{design}=\\dfrac{0.003d_{design}}{0.003+\\varepsilon_{t,design}}",
-      substitution: `c_{design}=\\dfrac{0.003(${n(designD, 2)})}{0.003+${n(epsilonTDesign, 6)}}=${n(cDesign, 2)}\\text{ mm}`,
-      result: "The neutral axis for the design superposition follows strain compatibility.",
+      formula: "c_t=\\dfrac{0.003d_{design}}{0.003+\\varepsilon_{t,design}};\\quad a_1=\\dfrac{A_{s1}f_y}{0.85f'_cb};\\quad c_{design}=\\dfrac{a_1}{\\beta_1}",
+      substitution: `c_t=\\dfrac{0.003(${n(designD, 2)})}{0.003+${n(epsilonTDesign, 6)}}=${n(targetCDesign, 2)}\\text{ mm};\\quad a_1=\\dfrac{(${n(result.asSinglyPortion, 2)})(${n(normalized.fy, 1)})}{0.85(${n(normalized.fc, 1)})(${n(normalized.b, 1)})}=${n(aDesign, 2)}\\text{ mm};\\quad c_{design}=\\dfrac{${n(aDesign, 2)}}{${n(result.beta1, 3)}}=${n(cDesign, 2)}\\text{ mm}`,
+      result: Math.abs(targetCDesign - cDesign) > 1e-6
+        ? "The Beam 1 block is reduced from the target-strain trial so its steel contribution and equilibrium remain consistent."
+        : "The target-strain Beam 1 block satisfies force equilibrium without reduction.",
       resultMath: `d_{design}=${n(designD, 2)}\\text{ mm};\\quad \\varepsilon_{t,design}=${n(epsilonTDesign, 6)};\\quad c_{design}=${n(cDesign, 2)}\\text{ mm}`,
       reference: referenceStrength,
     });
@@ -1884,10 +1923,19 @@ export function getDesignSolutionSteps(
     });
 
     steps.push({
+      label: "Concrete displaced by the trial compression steel",
+      formula: "f_{c,disp}=\\begin{cases}0.85f'_c&d'\\le a_1\\\\0&d'>a_1\\end{cases};\\quad f'_{s,net}=f'_{s,design}-f_{c,disp}",
+      substitution: `d'=${n(designDPrime, 2)}\\text{ mm};\\quad a_1=${n(aDesign, 2)}\\text{ mm};\\quad f_{c,disp}=${n(designDisplacedConcreteStress, 2)}\\text{ MPa};\\quad f'_{s,net}=${n(result.fsPrimeDesign, 2)}-${n(designDisplacedConcreteStress, 2)}=${n(designNetCompressionStress, 2)}\\text{ MPa}`,
+      result: "The Beam 2 couple uses net compression-steel force so concrete inside the Whitney block is not counted twice.",
+      resultMath: `f'_{s,net}=${n(designNetCompressionStress, 2)}\\text{ MPa}`,
+      reference: referenceStrength,
+    });
+
+    steps.push({
       label: "Required compression steel area",
-      formula: "A'_sf'_{s,design}=A_{s2}f_y;\\qquad A'_s=\\dfrac{A_{s2}f_y}{f'_{s,design}}",
-      substitution: `A'_s=\\dfrac{(${n(result.asAdditionalTension, 2)})(${n(normalized.fy, 1)})}{${n(result.fsPrimeDesign, 2)}}=${n(result.asCompression, 2)}\\text{ mm}^2`,
-      result: "This is the required top compression-steel area from equilibrium of the Beam 2 steel couple.",
+      formula: "A'_sf'_{s,net}=A_{s2}f_y;\\qquad A'_s=\\dfrac{A_{s2}f_y}{f'_{s,net}}",
+      substitution: `A'_s=\\dfrac{(${n(result.asAdditionalTension, 2)})(${n(normalized.fy, 1)})}{${n(designNetCompressionStress, 2)}}=${n(result.asCompression, 2)}\\text{ mm}^2`,
+      result: "This is the preliminary top-steel area from the net Beam 2 compression force; the final selected bars are checked by strain compatibility.",
       resultMath: `A'_s=${n(result.asCompression, 2)}\\text{ mm}^2`,
       reference: referenceStrength,
     });
@@ -2288,8 +2336,16 @@ export function getSolutionSteps(
 
   if (result.sectionType === "doubly") {
     const epsilonTDesign = normalized.targetTensionStrain ?? EPSILON_TENSION_CONTROLLED;
-    const cDesign = (EPSILON_CU * trialD) / (EPSILON_CU + epsilonTDesign);
+    const cTarget = (EPSILON_CU * trialD) / (EPSILON_CU + epsilonTDesign);
+    const cDesign = result.asSinglyPortion !== null
+      ? result.asSinglyPortion * normalized.fy /
+        (0.85 * normalized.fc * normalized.b * result.beta1)
+      : cTarget;
     const aDesign = result.beta1 * cDesign;
+    const dPrimeDesign = normalized.legacyEffectiveDepth && normalized.legacyDPrime !== null
+      ? normalized.legacyDPrime
+      : normalized.cover + normalized.stirrupDiameter + normalized.compressionBarDiameter / 2;
+    const displacedStress = dPrimeDesign <= aDesign ? 0.85 * normalized.fc : 0;
     add({
       label: "Why the design switches to a doubly reinforced section",
       formula: "\\phi M_{n,single}<M_u\\;\\text{or an applicable required/provided design check fails}",
@@ -2306,7 +2362,7 @@ export function getSolutionSteps(
     add({
       label: "Doubly reinforced superposition trial",
       formula: "c=\\dfrac{0.003}{0.003+\\varepsilon_{t,design}}d_{extreme};\\quad a=\\beta_1c;\\quad A_{s1}=\\dfrac{0.85f'_cba}{f_y}",
-      substitution: `\\varepsilon_{t,design}=${n(epsilonTDesign, 6)};\\quad c_{design}=0.003/(0.003+${n(epsilonTDesign, 6)})(${n(trialD, 2)})=${n(cDesign, 2)}\\text{ mm};\\quad a_{design}=(${n(result.beta1, 3)})(${n(cDesign, 2)})=${n(aDesign, 2)}\\text{ mm};\\quad A_{s1}=${n(result.asSinglyPortion, 2)}\\text{ mm}^2`,
+      substitution: `\\varepsilon_{t,design}=${n(epsilonTDesign, 6)};\\quad c_t=\\dfrac{0.003(${n(trialD, 2)})}{0.003+${n(epsilonTDesign, 6)}}=${n(cTarget, 2)}\\text{ mm};\\quad a_1=\\dfrac{A_{s1}f_y}{0.85f'_cb}=${n(aDesign, 2)}\\text{ mm};\\quad c_{design}=\\dfrac{a_1}{\\beta_1}=${n(cDesign, 2)}\\text{ mm};\\quad A_{s1}=${n(result.asSinglyPortion, 2)}\\text{ mm}^2`,
       result: result.warnings.some((warning) => warning.includes("capped"))
         ? "The ρmax cap controls the singly reinforced contribution; this is not the final provided-section capacity."
         : "This is the theoretical singly reinforced contribution, not the final provided-section capacity.",
@@ -2323,8 +2379,8 @@ export function getSolutionSteps(
     });
     add({
       label: "Compression-steel strain, stress, and theoretical area",
-      formula: "\\varepsilon'_s=0.003\\dfrac{c-d'}{c};\\quad f'_s=\\min(E_s\\varepsilon'_s,f_y);\\quad A'_s=A_{s2}f_y/f'_s",
-      substitution: `\\varepsilon'_{s,design}=0.003[c_{design}-d']/c_{design}=${n(result.epsilonSPrimeDesign, 6)};\\quad f'_{s,design}=\\min(E_s\\varepsilon'_{s,design},f_y)=${n(result.fsPrimeDesign, 2)}\\text{ MPa};\\quad A'_s=${n(result.asCompression, 2)}\\text{ mm}^2`,
+      formula: "\\varepsilon'_s=0.003\\dfrac{c-d'}{c};\\quad f'_s=\\min(E_s\\varepsilon'_s,f_y);\\quad A'_s=\\dfrac{A_{s2}f_y}{f'_s-f_{c,disp}}",
+      substitution: `\\varepsilon'_{s,design}=0.003\\dfrac{${n(cDesign, 2)}-${n(dPrimeDesign, 2)}}{${n(cDesign, 2)}}=${n(result.epsilonSPrimeDesign, 6)};\\quad f'_{s,design}=${n(result.fsPrimeDesign, 2)}\\text{ MPa};\\quad f_{c,disp}=${n(displacedStress, 2)}\\text{ MPa};\\quad A'_s=${n(result.asCompression, 2)}\\text{ mm}^2`,
       result: `The theoretical compression-steel ${result.compressionSteelYields ? "yields" : "does not yield"}; final provided-layer strains/stresses are listed below and drive capacity.`,
       reference: "NSCP 2015 Sections 422.2.1–422.2.2 / ACI 318-14 Sections 22.2.1–22.2.2.",
     });

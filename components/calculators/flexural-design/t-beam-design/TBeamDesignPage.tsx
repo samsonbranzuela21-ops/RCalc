@@ -3,10 +3,11 @@
 import { useId, useState } from "react";
 import Link from "next/link";
 import { InlineKatex } from "@/components/shared/Katex";
-import { TBeamCrossSection } from "@/components/calculators/flexural-design/t-beam-design/TBeamCrossSection";
+import { TBeamDesignResultView } from "@/components/calculators/flexural-design/t-beam-design/TBeamDesignResultView";
 import {
   designTBeam,
   getTBeamSolutionSteps,
+  type TBeamDesignInput,
   type TBeamDesignResult,
   type TBeamSolutionStep,
 } from "@/lib/t-beam";
@@ -33,6 +34,7 @@ export default function TBeamDesignPage() {
   const [barDiameter, setBarDiameter] = useState(25);
   const [compressionBarDiameter, setCompressionBarDiameter] = useState(20);
   const [result, setResult] = useState<TBeamDesignResult | null>(null);
+  const [designInput, setDesignInput] = useState<TBeamDesignInput | null>(null);
   const [steps, setSteps] = useState<TBeamSolutionStep[]>([]);
   const [error, setError] = useState("");
   const [showSolution, setShowSolution] = useState(false);
@@ -68,6 +70,7 @@ export default function TBeamDesignPage() {
     ) {
       setError("Enter a valid positive number in every input field.");
       setResult(null);
+      setDesignInput(null);
       setSteps([]);
       return;
     }
@@ -75,6 +78,7 @@ export default function TBeamDesignPage() {
     try {
       const computed = designTBeam(parsed);
       setResult(computed);
+      setDesignInput(parsed);
       setSteps(getTBeamSolutionSteps(parsed, computed));
       setError("");
       setShowSolution(false);
@@ -85,6 +89,7 @@ export default function TBeamDesignPage() {
           : "Unable to calculate the T-beam design."
       );
       setResult(null);
+      setDesignInput(null);
       setSteps([]);
     }
   }
@@ -222,147 +227,7 @@ export default function TBeamDesignPage() {
           </div>
         )}
 
-        {result && (
-          <div className="mt-6 rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] p-3 sm:p-4">
-            <div
-              className={`mb-3 rounded-md px-3 py-2 text-[11px] font-semibold ${
-                result.ok
-                  ? "bg-[#39c98a]/15 text-[#39c98a]"
-                  : "bg-[#f5941f]/15 text-[#f5941f]"
-              }`}
-            >
-              {result.message}
-            </div>
-
-            <TBeamCrossSection
-              beff={result.beff}
-              bw={Number(bw)}
-              hf={Number(hf)}
-              d={Number(d)}
-              a={result.a}
-              barDiameter={barDiameter}
-              barsRequired={result.barsRequired}
-              barsPerLayer={result.barsPerLayer}
-              sectionCase={result.sectionCase}
-              compressionBarsRequired={result.compressionBarsRequired}
-              compressionBarsPerLayer={result.compressionBarsPerLayer}
-              compressionBarDiameter={result.compressionBarDiameter}
-              dPrime={result.dPrime}
-            />
-
-            <div className="mt-4">
-              <ResultRow
-                label="Design status"
-                value={result.designStatus}
-                bold
-              />
-              <ResultRow label="Reinforcement type" value={result.sectionType === "doubly" ? "Doubly reinforced" : "Singly reinforced"} bold />
-             <ResultRow
-               label="Effective flange width, bf"
-               value={`${result.beff.toFixed(0)} mm`}
-             />
-              <ResultRow label="Flange width input" value={result.flangeWidthMode === "given" ? "Given bf" : "Calculated from both web spacings"} />
-              {result.flangeWidthMode === "calculated" && (
-                <>
-                  <ResultRow label="Left effective overhang" value={result.leftOverhang!.toFixed(2) + " mm"} />
-                  <ResultRow label="Right effective overhang" value={result.rightOverhang!.toFixed(2) + " mm"} />
-                  <ResultRow label="Limit on each side — ln/8" value={result.spanLimit!.toFixed(2) + " mm"} />
-                  <ResultRow label="Limit on each side — 8hf" value={result.thicknessLimit!.toFixed(2) + " mm"} />
-                  <ResultRow label="Left spacing limit — sw,L/2" value={result.leftSpacingLimit!.toFixed(2) + " mm"} />
-                  <ResultRow label="Right spacing limit — sw,R/2" value={result.rightSpacingLimit!.toFixed(2) + " mm"} />
-                </>
-              )}
-              <ResultRow label="β1" value={result.beta1.toFixed(3)} />
-              <ResultRow
-                label="Compression-block case"
-                value={
-                  result.sectionCase === "flange"
-                    ? "a ≤ hf — within flange"
-                    : "a > hf — flange and web"
-                }
-                bold
-              />
-              <ResultRow label="a" value={`${result.a.toFixed(2)} mm`} />
-              <ResultRow label="c" value={`${result.c.toFixed(2)} mm`} />
-              <ResultRow
-                label="As calculated"
-                value={`${result.asCalculated.toFixed(0)} mm²`}
-              />
-              <ResultRow
-                label="As,min"
-                value={`${result.asMin.toFixed(0)} mm²`}
-              />
-              <ResultRow
-                label="As required"
-                value={`${result.asRequired.toFixed(0)} mm²`}
-                bold
-              />
-              <ResultRow
-                label="Bars provided"
-                value={`${result.barsRequired} × ${barDiameter}mm`}
-                bold
-              />
-              <ResultRow
-                label="Bar arrangement"
-                value={`${result.barsPerLayer} bars maximum per layer × ${result.numberOfLayers} layer${
-                  result.numberOfLayers === 1 ? "" : "s"
-                }`}
-              />
-              <ResultRow
-                label="As provided"
-                value={`${result.asProvided.toFixed(0)} mm²`}
-              />
-              {result.sectionType === "doubly" && (
-                <>
-                  <ResultRow label="Compression bars provided" value={result.compressionBarsRequired + " × " + result.compressionBarDiameter + " mm"} bold />
-                  <ResultRow label="Compression steel area, As′" value={result.asCompression.toFixed(0) + " mm²"} />
-                  <ResultRow label="Compression steel depth, d′" value={result.dPrime.toFixed(1) + " mm"} />
-                  <ResultRow label="Compression steel at trial" value={result.compressionDesignStress >= Number(fy) - 1e-9 ? "Yields" : "Does not yield"} />
-                  <ResultRow label="Final compression rows" value={result.compressionLayers.map((layer) =>
-                    layer.barCount + " bars @ " + layer.depth.toFixed(1) + " mm (" +
-                    (Math.abs(layer.stress) >= Number(fy) - 1e-9 ? "yield" : "elastic") + ")"
-                  ).join("; ")} />
-                </>
-              )}
-              <ResultRow
-                label="Tension strain, εt"
-                value={result.epsilonT.toFixed(5)}
-              />
-              <ResultRow label="ϕ" value={result.phi.toFixed(3)} />
-              <ResultRow
-                label="Mn"
-                value={`${result.Mn.toFixed(2)} kN·m`}
-              />
-              <ResultRow
-                label="ϕMn"
-                value={`${result.phiMn.toFixed(2)} kN·m`}
-                bold
-              />
-              <ResultRow
-                label="Strength check"
-                value={`${result.phiMn.toFixed(2)} ${
-                  result.phiMn >= Number(Mu) ? "≥" : "<"
-                } ${Number(Mu).toFixed(2)} kN·m`}
-                bold
-              />
-              {result.spacingOk !== null && (
-                <ResultRow
-                  label="Clear bar spacing"
-                  value={`${result.clearSpacing?.toFixed(1)} mm ${
-                    result.spacingOk ? "— OK" : "— NOT OK"
-                  }`}
-                  bold
-                />
-              )}
-            </div>
-          </div>
-        )}
-
-        {result && result.spacingOk === false && (
-          <div className="mt-3 rounded-md bg-[#e05353]/15 px-3 py-2 text-[11px] font-semibold text-[#e05353]">
-            {result.spacingMessage}
-          </div>
-        )}
+        {result && designInput && <TBeamDesignResultView result={result} input={designInput} />}
 
         {result && steps.length > 0 && (
           <div className="mt-3">
@@ -371,11 +236,18 @@ export default function TBeamDesignPage() {
               onClick={() => setShowSolution((shown) => !shown)}
               className="text-[11px] font-semibold text-[#f5941f] underline"
             >
-              {showSolution ? "Hide full solution" : "Show full solution"}
+              {showSolution ? "Hide full design solution" : "Show full design solution"}
             </button>
 
             {showSolution && (
               <div className="mt-3 space-y-4 rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] p-3 sm:p-4">
+                <div>
+                  <h2 className="text-base font-extrabold">Full Manual T-Beam Design Solution</h2>
+                  <p className="mt-1 text-[11px] leading-relaxed text-[var(--text-muted)]">
+                    Each step shows the equation, numerical substitution, and result.
+                    Values are rounded only for display; final capacity uses the full-precision bar layout.
+                  </p>
+                </div>
                 {steps.map((step, index) => (
                   <div
                     key={`${step.label}-${index}`}
@@ -391,14 +263,19 @@ export default function TBeamDesignPage() {
                     </div>
 
                     <div className="mt-2 min-w-0 space-y-1.5 pl-0 sm:pl-7">
+                      <p className="text-[9px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">Equation</p>
                       <div className="max-w-full overflow-x-auto rounded bg-[var(--bg-surface)] px-2 py-1.5 text-[var(--text)]">
                         <InlineKatex math={step.formula} />
                       </div>
                       {step.substitution && (
-                        <div className="max-w-full overflow-x-auto text-[var(--text-muted)]">
-                          <InlineKatex math={step.substitution} />
-                        </div>
+                        <>
+                          <p className="text-[9px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">Substitution</p>
+                          <div className="max-w-full overflow-x-auto text-[var(--text-muted)]">
+                            <InlineKatex math={step.substitution} />
+                          </div>
+                        </>
                       )}
+                      <p className="text-[9px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">Answer</p>
                       <div className="mt-1.5 max-w-full overflow-x-auto rounded bg-[#39c98a]/15 px-2 py-1 text-[#39c98a]">
                         <InlineKatex math={step.result} />
                       </div>
@@ -420,7 +297,6 @@ export default function TBeamDesignPage() {
     </div>
   );
 }
-
 function Field({
   label,
   value,
@@ -446,25 +322,6 @@ function Field({
         onChange={(event) => onChange(event.target.value)}
         className="w-full rounded-md border border-[var(--border)] bg-[var(--bg)] px-2 py-2 text-xs text-[var(--text)]"
       />
-    </div>
-  );
-}
-
-function ResultRow({
-  label,
-  value,
-  bold,
-}: {
-  label: string;
-  value: string;
-  bold?: boolean;
-}) {
-  return (
-    <div className="flex min-w-0 items-start justify-between gap-4 border-b border-[var(--border)] py-1.5 text-[11px] last:border-b-0">
-      <span className="min-w-0 text-[var(--text-muted)]">{label}</span>
-      <span className={`min-w-0 text-right ${bold ? "font-bold" : ""}`}>
-        {value}
-      </span>
     </div>
   );
 }

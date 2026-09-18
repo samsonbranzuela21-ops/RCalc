@@ -477,6 +477,12 @@ function getLayeredTBeamSteps(input: FlangedBeamAnalysisInput, r: FlangedBeamAna
   const assumedA = r.flangeTrialA!;
   const selectedTrialA = r.webTrialA ?? assumedA;
   const selectedTrialC = selectedTrialA / r.beta1;
+  const doubly = r.compressionLayers.length > 0;
+  const trialLayers = [...r.tensionLayers, ...r.compressionLayers].map((layer, index) => {
+    const strain = 0.003 * (selectedTrialC - layer.depth) / selectedTrialC;
+    const stress = Math.max(-input.fy, Math.min(input.fy, r.Es * strain));
+    return { layer, index, strain, stress };
+  });
   const trialStrains = r.tensionLayers.map((layer) => 0.003 * (layer.depth - selectedTrialC) / selectedTrialC);
   const trialReasons: string[] = [];
   if (trialStrains.some((strain) => strain < r.epsilonY)) trialReasons.push("one or more tension layers remain elastic");
@@ -551,7 +557,39 @@ function getLayeredTBeamSteps(input: FlangedBeamAnalysisInput, r: FlangedBeamAna
       formula: "d=\\sum A_{si}d_i/\\sum A_{si}",
       substitution: "d=(" + r.tensionLayers.map((layer) => f(layer.area) + "(" + f(layer.depth) + ")").join("+") + ")/" + f(r.As),
       result: "d=" + f(r.d) + "\\;\\mathrm{mm}" },
-    ...trialSteps,
+    ...(doubly ? [{
+      label: "1. Compression-block assumption",
+      formula: "a_f=\\dfrac{A_sf_y}{0.85f'_cb_f},\\quad a_f\\le h_f\\Rightarrow\\mathrm{flange},\\quad a_f>h_f\\Rightarrow\\mathrm{web}",
+      substitution: "a_f=" + f(assumedA) + "\\;\\mathrm{mm},\\quad h_f=" + f(input.hf) + "\\;\\mathrm{mm}" +
+        (r.webTrialA === null ? "" : ",\\quad a_{w,\\mathrm{trial}}=" + f(r.webTrialA) + "\\;\\mathrm{mm}"),
+      result: "\\text{Initial block assumption: " + (r.webTrialA === null ? "within flange" : "flange plus web") + "; verify after steel equilibrium.}",
+    }] : []),
+    ...(doubly ? trialSteps.slice(0, r.webTrialA === null ? 2 : 3) : trialSteps),
+    ...(doubly ? [{
+      label: "2. Steel-state assumptions",
+      formula: "\\varepsilon_y=f_y/E_s,\\quad c>d'_i\\Rightarrow\\mathrm{top\\ bar\\ in\\ compression},\\quad c<d'_i\\Rightarrow\\mathrm{top\\ bar\\ in\\ tension}",
+      substitution: "c_{\\mathrm{trial}}=" + f(selectedTrialC) + "\\;\\mathrm{mm},\\quad\\varepsilon_y=" + f(r.epsilonY, 6) +
+        r.compressionLayers.map((layer, index) => ",\\quad d'_{" + (index + 1) + "}=" + f(layer.depth) + "\\;\\mathrm{mm}").join(""),
+      result: "\\text{Assume bottom bars in tension; test every top bar for compression/tension and yielding.}",
+    }, {
+      label: "3. Trial compatible steel stresses",
+      formula: "\\varepsilon_{si}=0.003(c_{\\mathrm{trial}}-d_i)/c_{\\mathrm{trial}},\\quad f_{si}=\\operatorname{clip}(E_s\\varepsilon_{si},-f_y,f_y)",
+      substitution: trialLayers.map(({ layer, index, strain }) =>
+        "\\varepsilon_{" + (index + 1) + ",\\mathrm{trial}}=0.003(" + f(selectedTrialC) + "-" + f(layer.depth) + ")/" +
+        f(selectedTrialC) + "=" + f(strain, 6)).join(",\\quad"),
+      result: trialLayers.map(({ index, stress }) => "f_{" + (index + 1) + ",\\mathrm{trial}}=" + f(stress) +
+        "\\;\\mathrm{MPa}\\;(" + (stress >= 0 ? "\\mathrm{compression}" : "\\mathrm{tension}") +
+        ",\\;" + (Math.abs(stress) >= input.fy - 1e-9 ? "\\mathrm{yielded}" : "\\mathrm{elastic}") + ")").join(",\\quad "),
+    }, ...trialSteps.slice(r.webTrialA === null ? 2 : 3), {
+      label: "4. Solve force equilibrium",
+      formula: "a=\\beta_1c,\\quad C_c(a)+\\sum_i A_{si}[f_{si}(c)-0.85f'_c\\eta_i(a)]=0",
+      substitution: "C_c=" + f((r.concreteWebForce + r.concreteFlangeForce) / 1000) +
+        "\\;\\mathrm{kN},\\quad\\sum F_{si,\\mathrm{net}}=" +
+        f([...r.tensionLayers, ...r.compressionLayers].reduce((sum, layer) => sum + layer.netForce, 0) / 1000) +
+        "\\;\\mathrm{kN}",
+      result: "c=" + f(r.c) + "\\;\\mathrm{mm},\\quad a=" + f(r.a) +
+        "\\;\\mathrm{mm},\\quad\\sum F=" + f(r.equilibriumResidual / 1000, 6) + "\\;\\mathrm{kN}",
+    }] : []),
     { label: "Determine stress-block region and solve force equilibrium", formula: `${concreteFormula},\\quad C_c+\\sum F_{si,\\mathrm{net}}=0,\\quad F_{si,\\mathrm{net}}=A_{si}(f_{si}-0.85f'_c\\eta_i)`,
       substitution: `a=\\beta_1c=${f(r.beta1, 3)}(${f(r.c)})=${f(r.a)}\\;\\mathrm{mm},\\quad h_f=${f(input.hf)}\\;\\mathrm{mm},\\quad ${r.sectionCase === "flange" ? "a\\le h_f" : "a>h_f"}`,
       result: `c=${f(r.c)}\\;\\mathrm{mm},\\quad C_c=${f((r.concreteWebForce + r.concreteFlangeForce) / 1000)}\\;\\mathrm{kN};\\quad \\mathrm{residual}=${f(r.equilibriumResidual / 1000, 6)}\\;\\mathrm{kN}` },
@@ -567,6 +605,23 @@ function getLayeredTBeamSteps(input: FlangedBeamAnalysisInput, r: FlangedBeamAna
     { label: "Steel yield checks and governing tensile strain", formula: "|\\varepsilon_{si}|\\ge\\varepsilon_y\\Rightarrow\\mathrm{yield};\\quad\\varepsilon_t=0.003(d_{\\mathrm{extreme}}-c)/c",
       substitution: `d_{\\mathrm{extreme}}=${f(r.dExtreme)}\\;\\mathrm{mm},\\quad c=${f(r.c)}\\;\\mathrm{mm},\\quad\\varepsilon_y=${f(r.epsilonY, 6)}`,
       result: `\\varepsilon_t=${f(r.epsilonT, 6)},\\quad \\mathrm{extreme\\ tension\\ steel\\ ${r.tensionSteelYields ? "yields" : "is\\ elastic"}}` },
+    ...(doubly ? [{
+      label: "5. Verify compression-block and steel assumptions",
+      formula: "a\\le h_f\\Rightarrow\\mathrm{flange},\\quad a>h_f\\Rightarrow\\mathrm{web};\\quad\\varepsilon_{si}=0.003(c-d_i)/c,\\quad |\\varepsilon_{si}|\\ge\\varepsilon_y\\Rightarrow\\mathrm{yield}",
+      substitution: "a=" + f(r.a) + "\\;\\mathrm{mm},\\quad h_f=" + f(input.hf) +
+        "\\;\\mathrm{mm},\\quad c=" + f(r.c) + "\\;\\mathrm{mm},\\quad\\varepsilon_y=" + f(r.epsilonY, 6),
+      result: "\\text{Initial " + (r.webTrialA === null ? "flange" : "flange plus web") +
+        "; final " + (r.sectionCase === "flange" ? "flange" : "flange plus web") +
+        "; check final steel states below.}",
+    }, ...r.compressionLayers.map((layer, index) => ({
+      label: "5a. Top layer " + (index + 1) + ": final state check",
+      formula: "\\varepsilon'_{s,i}=0.003(c-d'_i)/c,\\quad f'_{s,i}=\\operatorname{clip}(E_s\\varepsilon'_{s,i},-f_y,f_y)",
+      substitution: "c=" + f(r.c) + "\\;\\mathrm{mm},\\quad d'_{" + (index + 1) + "}=" +
+        f(layer.depth) + "\\;\\mathrm{mm},\\quad\\varepsilon'_{s," + (index + 1) + "}=" + f(layer.strain, 6),
+      result: "f'_{s," + (index + 1) + "}=" + f(layer.stress) + "\\;\\mathrm{MPa}\\quad\\text{" +
+        (layer.stress >= 0 ? "compression" : "tension") + ", " +
+        (layer.yields ? "yielded" : "elastic") + "}",
+    }))] : []),
     { label: "Concrete compression resultants and centroids", formula: r.sectionCase === "flange"
       ? "C_c=0.85f'_cb_fa,\\quad y_c=a/2"
       : "C_w=0.85f'_cb_wa,\\quad C_f=0.85f'_c(b_f-b_w)h_f,\\quad y_w=a/2,\\ y_f=h_f/2",
@@ -583,12 +638,18 @@ function getLayeredTBeamSteps(input: FlangedBeamAnalysisInput, r: FlangedBeamAna
         : "M_n=[(" + f(r.concreteWebForce / 1000) + ")(" + f(r.d) + "-" + f(r.a) + "/2)]/1000",
       result: "M_n=" + f(r.Mn) + "\\;\\mathrm{kN}\\cdot\\mathrm{m}",
     }] : []),
-    { label: "Nominal moment from every force about the top face", formula: "M_n=-[C_w(a/2)+C_f(h_f/2)+\\sum F_{si,\\mathrm{net}}d_i]/10^6",
+    { label: doubly ? "6. Nominal moment from every force about the top face" : "Nominal moment from every force about the top face", formula: "M_n=-[C_w(a/2)+C_f(h_f/2)+\\sum F_{si,\\mathrm{net}}d_i]/10^6",
       substitution: `M_n=-[(${f(r.concreteWebForce)})(${f(r.a / 2)})+(${f(r.concreteFlangeForce)})(${f(input.hf / 2)})+${layers.map((layer) => `(${f(layer.netForce)})(${f(layer.depth)})`).join("+")}]/10^6`,
       result: `M_n=${f(r.Mn)}\\;\\mathrm{kN}\\cdot\\mathrm{m}` },
-    { label: "Strength reduction factor and design capacity", formula: "\\phi=\\begin{cases}0.65&\\varepsilon_t\\le\\varepsilon_y\\\\0.65+0.25(\\varepsilon_t-\\varepsilon_y)/(0.005-\\varepsilon_y)&\\varepsilon_y<\\varepsilon_t<0.005\\\\0.90&\\varepsilon_t\\ge0.005\\end{cases}",
+    { label: doubly ? "7. Strength-reduction factor" : "Strength reduction factor and design capacity", formula: "\\phi=\\begin{cases}0.65&\\varepsilon_t\\le\\varepsilon_y\\\\0.65+0.25(\\varepsilon_t-\\varepsilon_y)/(0.005-\\varepsilon_y)&\\varepsilon_y<\\varepsilon_t<0.005\\\\0.90&\\varepsilon_t\\ge0.005\\end{cases}",
       substitution: `\\varepsilon_t=${f(r.epsilonT, 6)},\\quad \\varepsilon_y=${f(r.epsilonY, 6)},\\quad \\phi=${f(r.phi, 3)}`,
-      result: `\\phi M_n=${f(r.phi, 3)}(${f(r.Mn)})=${f(r.phiMn)}\\;\\mathrm{kN}\\cdot\\mathrm{m}` },
+      result: doubly ? `\\phi=${f(r.phi, 3)}` : `\\phi M_n=${f(r.phi, 3)}(${f(r.Mn)})=${f(r.phiMn)}\\;\\mathrm{kN}\\cdot\\mathrm{m}` },
+    ...(doubly ? [{
+      label: "8. Design moment capacity",
+      formula: "\\phi M_n=\\phi\\,M_n",
+      substitution: "\\phi M_n=" + f(r.phi, 3) + "(" + f(r.Mn) + ")",
+      result: "\\phi M_n=" + f(r.phiMn) + "\\;\\mathrm{kN}\\cdot\\mathrm{m}",
+    }] : []),
   ];
   steps.push({
     label: "Minimum tensile strain for a nonprestressed beam",

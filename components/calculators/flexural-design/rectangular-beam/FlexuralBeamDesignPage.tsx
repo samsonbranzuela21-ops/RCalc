@@ -5,6 +5,7 @@ import { useState, type ReactNode } from "react";
 import { InlineKatex } from "@/components/shared/Katex";
 import { FlexuralBeamDiagram } from "@/components/calculators/flexural-design/rectangular-beam/FlexuralBeamDiagram";
 import { designSinglyReinforcedBeam, getDesignSolutionSteps, getReinforcementLayoutCapacity, type FlexuralBeamInput, type FlexuralBeamResult, type SolutionStep } from "@/lib/flexural-beam";
+import { rectangularBeamAnalysisHref } from "@/lib/rectangular-beam-design-transfer";
 
 const barSizes = [12, 16, 20, 25, 28, 32];
 
@@ -76,7 +77,7 @@ export default function FlexuralBeamDesignPage() {
             <p className="mt-1 text-[10px] text-[var(--text-muted)]">Used only when the singly reinforced portion cannot carry the required design moment.</p>
             <div className="mt-2 max-w-sm"><BarSelect label="Compression-bar diameter (mm)" value={compressionBarDiameter} onChange={(v) => update(setCompressionBarDiameter, v)} /></div>
           </div>
-          <p className="col-span-full text-[10px] leading-relaxed text-[var(--text-muted)]">One cover value is used on all faces and is measured to the outside of the stirrup. Enter εt ≥ 0.004 to set the trial neutral-axis depth using <InlineKatex math="c=\dfrac{0.003d}{0.003+\varepsilon_t}" />. If left blank, the original moment-based method uses εt = 0.005 as its initial tension-controlled assumption; the selected-bar strain and φ are checked afterward. Design equations and detailing checks follow NSCP 2015 / ACI 318-14. The adopted design limit is <InlineKatex math="\rho_{max}=0.025" />.</p>
+          <p className="col-span-full text-[10px] leading-relaxed text-[var(--text-muted)]">One cover value is used on all faces and is measured to the outside of the stirrup. Enter εt ≥ 0.004 to set the trial neutral-axis depth using <InlineKatex math="c=\dfrac{0.003d}{0.003+\varepsilon_t}" />. If left blank, the initial trial assumes εt = 0.005; the selected-bar strain and φ are checked afterward. Design equations and detailing checks follow NSCP 2015 / ACI 318-14. This calculator adopts the special moment-frame beam limit <InlineKatex math="\rho_{max}=0.025" />; confirm whether that seismic provision applies to your project.</p>
         </div>
 
         {inputError && <div role="alert" className="mt-3 rounded-md bg-[#e05353]/15 px-3 py-2 text-xs font-semibold text-[#e05353]">{inputError}</div>}
@@ -151,10 +152,10 @@ function DesignResult({ result }: { result: FlexuralBeamResult }) {
     <div className="mt-4 rounded-lg border border-[var(--border)] bg-[var(--bg)] p-4">
       <p className="text-xs font-semibold">Continue with section analysis</p>
       <p className="mt-1 text-[11px] leading-relaxed text-[var(--text-muted)]">Use the adopted dimensions, cover, and bar layout in Rectangular Beam Analysis to review neutral-axis depth, strain compatibility, steel stresses, and design moment capacity.</p>
-      {result.ok && result.tensionBarsPerLayer.length <= 2 && result.compressionBarsPerLayer.length <= 2 ? (
+      {result.ok ? (
         <Link href={rectangularBeamAnalysisHref(result)} className="mt-3 inline-flex rounded-md border border-[#f5941f]/50 px-3 py-2 text-xs font-semibold text-[#f5941f] hover:bg-[#f5941f]/10">Analyze this design in Rectangular Beam Analysis</Link>
       ) : (
-        <p className="mt-3 text-[10px] text-[var(--text-muted)]">Complete a feasible design with no more than two rows at either face before transferring it to Rectangular Beam Analysis.</p>
+        <p className="mt-3 text-[10px] text-[var(--text-muted)]">Complete a feasible design before transferring it to Rectangular Beam Analysis.</p>
       )}
     </div>
   </section>;
@@ -198,6 +199,7 @@ function FailureExplanation({ result }: { result: FlexuralBeamResult }) {
     <p className="font-semibold text-[#e05353]">Why the design cannot be detailed</p>
     {result.failureDetails && <p className="mt-1 text-[var(--text-muted)]">{result.failureDetails}</p>}
     {result.failureType === "layout" && <><p className="mt-2">The selected tension-bar size allows at most {capacity.maximumBarsPerLayer} bars per layer and {capacity.maximumTotalBars} bars within the section.</p><div className="mt-2"><FormulaLine math="n d_b+(n-1)s_{clear,min}\le b_{inside};\quad s_{clear,min}=\max\left(25,d_b,\dfrac{4d_{agg}}{3}\right)" muted /></div><p className="mt-2 text-[var(--text-muted)]">Increase the beam width or height, select another bar size, or reduce the design demand.</p></>}
+    {result.failureType === "reinforcement-limit" && <><p className="mt-2">A doubly reinforced trial may meet the moment demand but still exceed the adopted special moment-frame tension-steel ratio.</p><div className="mt-2"><FormulaLine math="\rho_{provided}=\dfrac{A_{s,provided}}{bd}\le\rho_{max}=0.025" muted /></div><p className="mt-2 text-[var(--text-muted)]">Increase the section dimensions or confirm the applicable seismic detailing requirements with the project engineer.</p></>}
   </div>;
 }
 
@@ -208,23 +210,3 @@ function BarSelect({ label, value, onChange }: { label: string; value: number; o
 function FormulaLine({ math, muted = false }: { math: string; muted?: boolean }) { return <div className={`max-w-full overflow-x-auto rounded-md px-3 py-2 text-xs ${muted ? "bg-[var(--bg-surface)] text-[var(--text-muted)]" : "bg-[var(--bg-surface)]"}`}><InlineKatex math={math} /></div>; }
 function barSchedule(layers: number[], diameter: number): string { const total = layers.reduce((sum, count) => sum + count, 0); return layers.length > 1 ? `${total}–${diameter} mm bars (${layers.join(" + ")} by layer)` : `${total}–${diameter} mm bars`; }
 function fmt(value: number | null | undefined, digits = 2): string { return value !== null && value !== undefined && Number.isFinite(value) ? value.toFixed(digits) : "—"; }
-
-function rectangularBeamAnalysisHref(result: FlexuralBeamResult): string {
-  const params = new URLSearchParams({
-    source: "flexural-beam-design",
-    b: String(result.input.b),
-    h: String(result.input.h),
-    cover: String(result.input.cover),
-    stirrup: String(result.input.stirrupDiameter),
-    fc: String(result.input.fc),
-    fy: String(result.input.fy),
-    Es: String(result.input.Es),
-    mu: String(result.input.Mu),
-    tensionDiameter: String(result.input.barDiameter),
-    tensionRows: result.tensionBarsPerLayer.join(","),
-    doubly: result.compressionBarsRequired > 0 ? "1" : "0",
-    compressionDiameter: String(result.input.compressionBarDiameter),
-    compressionRows: result.compressionBarsPerLayer.join(","),
-  });
-  return `/calculators/rectangular-beam-analysis?${params.toString()}`;
-}

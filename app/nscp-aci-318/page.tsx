@@ -1064,13 +1064,25 @@ function CodeTable({
 
 export default function ReferencesPage() {
   return (
-    <main className="relative min-h-screen overflow-x-hidden bg-[var(--bg)] px-3 py-5 text-[var(--text)] sm:px-6 sm:py-9">
+    <main
+      className="relative min-h-screen overflow-x-hidden bg-[var(--bg)] px-3 py-5 text-[var(--text)] sm:px-6 sm:py-9"
+      style={{
+        backgroundImage: [
+          "linear-gradient(rgba(77, 124, 255, 0.075) 1px, transparent 1px)",
+          "linear-gradient(90deg, rgba(77, 124, 255, 0.075) 1px, transparent 1px)",
+          "radial-gradient(ellipse 72% 44% at 50% -8%, rgba(30, 84, 153, 0.20), transparent 76%)",
+          "linear-gradient(180deg, rgba(13, 23, 40, 0.32), transparent 42%)",
+        ].join(", "),
+        backgroundSize: "100px 100px, 100px 100px, 100% 100%, 100% 100%",
+        backgroundAttachment: "fixed",
+      }}
+    >
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute inset-x-0 top-0 -z-0 h-[430px] opacity-70"
+        className="pointer-events-none absolute inset-x-0 top-0 -z-0 h-[430px] opacity-35"
         style={{
           backgroundImage:
-            "radial-gradient(ellipse 70% 55% at 12% 0%, rgba(22, 140, 255, 0.12), transparent 72%), linear-gradient(to bottom, rgba(77, 124, 255, 0.05), transparent 75%)",
+            "radial-gradient(ellipse 70% 55% at 12% 0%, rgba(22, 140, 255, 0.16), transparent 72%), linear-gradient(to bottom, rgba(77, 124, 255, 0.06), transparent 75%)",
         }}
       />
 

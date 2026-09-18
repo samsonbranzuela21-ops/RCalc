@@ -4,6 +4,7 @@ import { useState } from "react";
 import { InlineKatex } from "@/components/shared/Katex";
 import { LBeamCrossSection } from "@/components/calculators/flexural-design/l-beam-design/LBeamCrossSection";
 import { TBeamAnalysisDiagram } from "./TBeamAnalysisDiagram";
+import type { TBeamAnalysisPrefill } from "@/lib/t-beam-design-transfer";
 import {
   analyzeFlangedBeam,
   deriveTBeamLayersFromOverallHeight,
@@ -20,29 +21,37 @@ interface EditableLayer { id: number; count: string; diameter: string; depth: st
 type LayerRole = "tension" | "compression";
 type DepthMode = "direct" | "fromH";
 
-export default function FlangedBeamAnalysisPage({ shape }: { shape: FlangedBeamShape }) {
-  const [bw, setBw] = useState("300");
-  const [hf, setHf] = useState("120");
-  const [d, setD] = useState("550");
+export default function FlangedBeamAnalysisPage({ shape, prefill }: { shape: FlangedBeamShape; prefill?: TBeamAnalysisPrefill }) {
+  const [bw, setBw] = useState(String(prefill?.bw ?? 300));
+  const [hf, setHf] = useState(String(prefill?.hf ?? 120));
+  const [d, setD] = useState(String(prefill?.d ?? 550));
   const [depthMode, setDepthMode] = useState<DepthMode>("direct");
   const [h, setH] = useState("600");
-  const [clearCover, setClearCover] = useState("40");
-  const [stirrupDiameter, setStirrupDiameter] = useState(10);
-  const [flangeWidthMode, setFlangeWidthMode] = useState<"calculated" | "given">("calculated");
-  const [bf, setBf] = useState("1500");
-  const [span, setSpan] = useState("6000");
-  const [clearSpacingLeft, setClearSpacingLeft] = useState("2700");
-  const [clearSpacingRight, setClearSpacingRight] = useState("2700");
-  const [fc, setFc] = useState("28");
-  const [fy, setFy] = useState("420");
-  const [Es, setEs] = useState("200000");
-  const [barCount, setBarCount] = useState("4");
-  const [barDiameter, setBarDiameter] = useState(25);
-  const [Mu, setMu] = useState("");
-  const [isDoubly, setIsDoubly] = useState(false);
-  const [nextLayerId, setNextLayerId] = useState(3);
-  const [tensionLayers, setTensionLayers] = useState<EditableLayer[]>([{ id: 1, count: "4", diameter: "25", depth: "550" }]);
-  const [compressionLayers, setCompressionLayers] = useState<EditableLayer[]>([{ id: 2, count: "2", diameter: "16", depth: "60" }]);
+  const [clearCover, setClearCover] = useState(String(prefill?.clearCover ?? 40));
+  const [stirrupDiameter, setStirrupDiameter] = useState(prefill?.stirrupDiameter ?? 10);
+  const [flangeWidthMode, setFlangeWidthMode] = useState<"calculated" | "given">(prefill?.flangeWidthMode ?? "calculated");
+  const [bf, setBf] = useState(String(prefill?.bf ?? 1500));
+  const [span, setSpan] = useState(String(prefill?.span ?? 6000));
+  const [clearSpacingLeft, setClearSpacingLeft] = useState(String(prefill?.clearSpacingLeft ?? 2700));
+  const [clearSpacingRight, setClearSpacingRight] = useState(String(prefill?.clearSpacingRight ?? 2700));
+  const [fc, setFc] = useState(String(prefill?.fc ?? 28));
+  const [fy, setFy] = useState(String(prefill?.fy ?? 420));
+  const [Es, setEs] = useState(String(prefill?.Es ?? 200000));
+  const [barCount, setBarCount] = useState(String(prefill?.tensionLayers.reduce((sum, layer) => sum + layer.barCount, 0) ?? 4));
+  const [barDiameter, setBarDiameter] = useState(prefill?.tensionLayers[0]?.barDiameter ?? 25);
+  const [Mu, setMu] = useState(prefill ? String(prefill.Mu) : "");
+  const [isDoubly, setIsDoubly] = useState((prefill?.compressionLayers.length ?? 0) > 0);
+  const [nextLayerId, setNextLayerId] = useState(10);
+  const [tensionLayers, setTensionLayers] = useState<EditableLayer[]>(prefill
+    ? prefill.tensionLayers.map((layer, index) => ({
+        id: index + 1, count: String(layer.barCount), diameter: String(layer.barDiameter), depth: String(layer.depth),
+      }))
+    : [{ id: 1, count: "4", diameter: "25", depth: "550" }]);
+  const [compressionLayers, setCompressionLayers] = useState<EditableLayer[]>(prefill?.compressionLayers.length
+    ? prefill.compressionLayers.map((layer, index) => ({
+        id: index + 4, count: String(layer.barCount), diameter: String(layer.barDiameter), depth: String(layer.depth),
+      }))
+    : [{ id: 2, count: "2", diameter: "16", depth: "60" }]);
   const [result, setResult] = useState<FlangedBeamAnalysisResult | null>(null);
   const [steps, setSteps] = useState<FlangedBeamAnalysisStep[]>([]);
   const [error, setError] = useState("");

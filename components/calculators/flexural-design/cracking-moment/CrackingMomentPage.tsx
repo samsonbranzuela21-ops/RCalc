@@ -150,7 +150,7 @@ export default function CrackingMomentPage() {
           <p className="text-[10px] font-bold uppercase tracking-[0.08em] text-[#8facd9]">Analysis options</p>
           <div className="mt-3 grid gap-3 md:grid-cols-3">
             <SelectField
-              label="Before-cracking Yg and Ig"
+              label="Getting the value of Yg and Ig"
               value={hasReinforcement ? momentBasis : "gross"}
               disabled={!hasReinforcement}
               onChange={(value) => { setMomentBasis(value as MomentBasis); clearOutput(); }}

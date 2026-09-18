@@ -3,6 +3,7 @@
 import { useState, type ReactNode } from "react";
 import { InlineKatex } from "@/components/shared/Katex";
 import { StrainStressDiagram } from "@/components/calculators/analysis/rectangular-beam-analysis/StrainStressDiagram";
+import type { RectangularBeamDesignPrefill } from "@/lib/rectangular-beam-design-transfer";
 import {
   analyzeRectangularBeam,
   getRectangularBeamAnalysisSolutionSteps,
@@ -13,22 +14,6 @@ import {
 const stirrupSizes = [10, 12, 16];
 interface EditableLayer { id: number; count: string; diameter: string; depth: string }
 type LayerRole = "tension" | "compression";
-
-export interface RectangularBeamAnalysisPrefill {
-  b: number;
-  h: number;
-  clearCover: number;
-  stirrupDiameter: number;
-  fc: number;
-  fy: number;
-  Es: number;
-  Mu: number;
-  tensionBarDiameter: number;
-  tensionRows: number[];
-  isDoubly: boolean;
-  compressionBarDiameter: number;
-  compressionRows: number[];
-}
 
 interface LayerSpacingCheck {
   barsPerLayer: number[];
@@ -93,7 +78,7 @@ function formatLayerSpacing(check: LayerSpacingCheck): string {
     return `${values.join("; ")} - ${check.ok ? "OK" : "NOT OK"}`;
 }
 
-export default function RectangularBeamAnalysisPage({ prefill }: { prefill?: RectangularBeamAnalysisPrefill }) {
+export default function RectangularBeamAnalysisPage({ prefill }: { prefill?: RectangularBeamDesignPrefill }) {
   const initialTensionRows = prefill?.tensionRows ?? [5];
   const initialCompressionRows = prefill?.compressionRows.length ? prefill.compressionRows : [2];
   const [b, setB] = useState(String(prefill?.b ?? 300));
@@ -108,12 +93,12 @@ export default function RectangularBeamAnalysisPage({ prefill }: { prefill?: Rec
   const [stirrupDiameter, setStirrupDiameter] = useState(prefill?.stirrupDiameter ?? 10);
 
   const [isDoubly, setIsDoubly] = useState(prefill?.isDoubly ?? false);
-  const [nextLayerId, setNextLayerId] = useState(10);
+  const [nextLayerId, setNextLayerId] = useState(initialTensionRows.length + initialCompressionRows.length + 1);
   const [tensionLayers, setTensionLayers] = useState<EditableLayer[]>(initialTensionRows.map((count, index) => ({
     id: index + 1, count: String(count), diameter: String(prefill?.tensionBarDiameter ?? 20), depth: String(450 - index * 45),
   })));
   const [compressionLayers, setCompressionLayers] = useState<EditableLayer[]>(initialCompressionRows.map((count, index) => ({
-    id: index + 5, count: String(count), diameter: String(prefill?.compressionBarDiameter ?? 16), depth: String(60 + index * 41),
+    id: initialTensionRows.length + index + 1, count: String(count), diameter: String(prefill?.compressionBarDiameter ?? 16), depth: String(60 + index * 41),
   })));
 
   const [result, setResult] = useState<RectangularBeamAnalysisResult | null>(null);

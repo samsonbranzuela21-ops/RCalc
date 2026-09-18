@@ -619,253 +619,388 @@ export function getTBeamSolutionSteps(
   input: TBeamDesignInput,
   result: TBeamDesignResult
 ): TBeamSolutionStep[] {
-  const flangeSteps: TBeamSolutionStep[] = result.flangeWidthMode === "given"
-    ? [{
-        label: "Given effective flange width",
-        formula: "b_f=b_{f,\\mathrm{given}}",
-        substitution: "b_f=" + n(input.bf!) + "\\;\\text{mm}",
-        result: "b_f=" + n(result.beff) + "\\;\\text{mm}",
-      }]
-    : [
-        {
-          label: "Effective left overhang",
-          formula: "b_{o,L}=\\min(\\ell_n/8,8h_f,s_{w,L}/2)",
-          substitution: "b_{o,L}=\\min(" + n(result.spanLimit!) + "," +
-            n(result.thicknessLimit!) + "," + n(result.leftSpacingLimit!) + ")",
-          result: "b_{o,L}=" + n(result.leftOverhang!) + "\\;\\text{mm}",
-        },
-        {
-          label: "Effective right overhang",
-          formula: "b_{o,R}=\\min(\\ell_n/8,8h_f,s_{w,R}/2)",
-          substitution: "b_{o,R}=\\min(" + n(result.spanLimit!) + "," +
-            n(result.thicknessLimit!) + "," + n(result.rightSpacingLimit!) + ")",
-          result: "b_{o,R}=" + n(result.rightOverhang!) + "\\;\\text{mm}",
-        },
-        {
-          label: "Effective flange width (interior T-beam)",
-          formula: "b_f=b_w+b_{o,L}+b_{o,R}",
-          substitution: "b_f=" + n(input.bw) + "+" + n(result.leftOverhang!) +
-            "+" + n(result.rightOverhang!),
-          result: "b_f=" + n(result.beff) + "\\;\\text{mm}",
-        },
-      ];
-  if (result.sectionType === "doubly") {
-    const trialPhi = getPhi(result.targetTensionStrain, input.fy, result.Es);
-    const trialMn = result.singlyTrialPhiMn / trialPhi;
-    const cf = result.concreteFlangeForce / 1000;
-    const cw = result.concreteWebForce / 1000;
-    const tf = result.tensionLayers.reduce((sum, layer) => sum + layer.netForce, 0) / 1000;
-    const cs = result.compressionLayers.reduce((sum, layer) => sum + layer.netForce, 0) / 1000;
-    const layerSteps: TBeamSolutionStep[] = [
-      ...result.tensionLayers.map((layer, index) => ({
-        label: "Tension layer " + (index + 1) + ": strain, stress and force",
-        formula: "\\varepsilon_s=0.003(c-d_i)/c,\\quad f_s=\\max(-f_y,\\min(f_y,E_s\\varepsilon_s))",
-        substitution: "d_i=" + n(layer.depth) + "\\;\\text{mm},\\quad A_{s,i}=" + n(layer.area) + "\\;\\text{mm}^2",
-        result: "\\varepsilon_s=" + n(layer.strain, 5) + ",\\quad f_s=" + n(layer.stress) +
-          "\\;\\text{MPa},\\quad F_{s,i}=" + n(layer.netForce / 1000) + "\\;\\text{kN}",
-      })),
-      ...result.compressionLayers.map((layer, index) => ({
-        label: "Compression layer " + (index + 1) + ": strain, yield and net force",
-        formula: "F'_{s,i}=A'_{s,i}(f'_{s,i}-0.85f'_c\\eta_i)",
-        substitution: "d'_i=" + n(layer.depth) + "\\;\\text{mm},\\quad A'_{s,i}=" + n(layer.area) +
-          "\\;\\text{mm}^2,\\quad \\varepsilon'_{s,i}=" + n(layer.strain, 5),
-        result: "f'_{s,i}=" + n(layer.stress) + "\\;\\text{MPa},\\quad F'_{s,i}=" +
-          n(layer.netForce / 1000) + "\\;\\text{kN},\\quad " +
-          (Math.abs(layer.stress) >= input.fy - 1e-9 ? "\\text{yields}" : "\\text{elastic}"),
-      })),
-    ];
-    return [
-      ...flangeSteps,
+  const steps: TBeamSolutionStep[] = [];
+  if (result.flangeWidthMode === "given") {
+    steps.push({
+      label: "Given effective flange width",
+      formula: "b_f=b_{f,\\mathrm{given}}",
+      substitution: "b_f=" + n(result.beff) + "\\;\\mathrm{mm}",
+      result: "b_f=" + n(result.beff) + "\\;\\mathrm{mm}\\ge b_w=" + n(input.bw) + "\\;\\mathrm{mm}",
+    });
+  } else {
+    const spanLimit = result.spanLimit!;
+    const thicknessLimit = result.thicknessLimit!;
+    steps.push(
       {
-        label: "Trial tension-controlled neutral axis",
-        formula: "c_t=0.003d/(0.003+\\varepsilon_{t,trial}),\\quad a_t=\\beta_1c_t",
-        substitution: "d=" + n(input.d) + "\\;\\text{mm},\\quad \\varepsilon_{t,trial}=" +
-          n(result.targetTensionStrain, 5) + ",\\quad \\beta_1=" + n(result.beta1, 3),
-        result: "c_t=" + n(result.trialC) + "\\;\\text{mm},\\quad a_t=" + n(result.trialA) + "\\;\\text{mm}",
+        label: "Effective left overhang",
+        formula: "b_{o,L}=\\min(\\ell_n/8,8h_f,s_{w,L}/2)",
+        substitution: "b_{o,L}=\\min(" + n(input.span!) + "/8,8(" + n(input.hf) +
+          ")," + n(input.clearSpacingLeft!) + "/2)",
+        result: "b_{o,L}=\\min(" + n(spanLimit) + "," + n(thicknessLimit) +
+          "," + n(result.leftSpacingLimit!) + ")=" + n(result.leftOverhang!) + "\\;\\mathrm{mm}",
       },
       {
-        label: "Singly reinforced trial and flange/web assumption",
-        formula: result.trialA <= input.hf
-          ? "C_c=0.85f'_cb_fa\\;(a\\le h_f)"
-          : "C_c=0.85f'_c[b_wa+(b_f-b_w)h_f]\\;(a>h_f)",
-        substitution: "a_t=" + n(result.trialA) + "\\;\\text{mm},\\quad h_f=" + n(input.hf) +
-          "\\;\\text{mm},\\quad M_{n,trial}=" + n(trialMn) + "\\;\\text{kN}\\cdot\\text{m}",
-        result: "\\phi_{trial}M_{n,trial}=" + n(result.singlyTrialPhiMn) + "<M_u=" + n(input.Mu),
+        label: "Effective right overhang",
+        formula: "b_{o,R}=\\min(\\ell_n/8,8h_f,s_{w,R}/2)",
+        substitution: "b_{o,R}=\\min(" + n(input.span!) + "/8,8(" + n(input.hf) +
+          ")," + n(input.clearSpacingRight!) + "/2)",
+        result: "b_{o,R}=\\min(" + n(spanLimit) + "," + n(thicknessLimit) +
+          "," + n(result.rightSpacingLimit!) + ")=" + n(result.rightOverhang!) + "\\;\\mathrm{mm}",
       },
       {
-        label: "Compression steel strain and yield check",
-        formula: "\\varepsilon'_s=0.003(c_t-d')/c_t,\\quad f'_s=\\min(f_y,E_s\\varepsilon'_s)",
-        substitution: "d'=" + n(result.dPrime) + "\\;\\text{mm},\\quad E_s=" + n(result.Es) + "\\;\\text{MPa}",
-        result: "f'_{s,trial}=" + n(result.compressionDesignStress) + "\\;\\text{MPa},\\quad " +
-          (result.compressionDesignStress >= input.fy - 1e-9 ? "\\text{yields}" : "\\text{does not yield}"),
+        label: "Effective flange width",
+        formula: "b_f=b_w+b_{o,L}+b_{o,R}",
+        substitution: "b_f=" + n(input.bw) + "+" + n(result.leftOverhang!) +
+          "+" + n(result.rightOverhang!),
+        result: "b_f=" + n(result.beff) + "\\;\\mathrm{mm}",
       },
-      {
-        label: "Trial supplementary compression and tension steel",
-        formula: "F'_s=(M_u/\\phi_{trial}-M_{n,trial})10^6/(d-d'),\\quad A'_{s,calc}=F'_s/(f'_s-0.85f'_c\\eta),\\quad A_{s,2}=F'_s/f_y",
-        substitution: "M_u=" + n(input.Mu) + "\\;\\text{kN}\\cdot\\text{m},\\quad d-d'=" +
-          n(input.d - result.dPrime) + "\\;\\text{mm}",
-        result: "A'_{s,calc}=" + n(result.asCompressionCalculated) + "\\;\\text{mm}^2,\\quad A_{s,2}=" +
-          n(result.asAdditionalTension) + "\\;\\text{mm}^2,\\quad \\eta=\\text{bar-area fraction in concrete block}",
-      },
-      {
-        label: "Selected reinforcement in web",
-        formula: "A_s=n_s\\pi d_b^2/4,\\quad A'_s=n'_s\\pi d_b'^2/4",
-        substitution: "n_s=" + result.barsRequired + ",\\quad n'_s=" + result.compressionBarsRequired,
-        result: "A_s=" + n(result.asProvided) + "\\;\\text{mm}^2,\\quad A'_s=" +
-          n(result.asCompression) + "\\;\\text{mm}^2",
-      },
-      {
-        label: "Final neutral axis and compression-block case",
-        formula: "C_c+\\sum F'_{s,i}+\\sum F_{s,i}=0,\\quad a=\\beta_1c",
-        substitution: "c=" + n(result.c) + "\\;\\text{mm},\\quad a=" + n(result.a) +
-          "\\;\\text{mm},\\quad h_f=" + n(input.hf) + "\\;\\text{mm}",
-        result: result.sectionCase === "flange" ? "a\\le h_f\\;\\text{(flange only)}" : "a>h_f\\;\\text{(flange and web)}",
-      },
-      {
-        label: "Flange and web concrete resultants",
-        formula: result.sectionCase === "flange"
-          ? "C_c=0.85f'_cb_fa"
-          : "C_f=0.85f'_c(b_f-b_w)h_f,\\quad C_w=0.85f'_cb_wa",
-        substitution: "b_f=" + n(result.beff) + "\\;\\text{mm},\\quad a=" + n(result.a) + "\\;\\text{mm}",
-        result: result.sectionCase === "flange"
-          ? "C_c=" + n(cw) + "\\;\\text{kN}"
-          : "C_f=" + n(cf) + "\\;\\text{kN},\\quad C_w=" + n(cw) + "\\;\\text{kN}",
-      },
-      ...layerSteps,
-      {
-        label: "Final force equilibrium",
-        formula: result.sectionCase === "flange"
-          ? "C_c+\\sum F'_s+\\sum F_s=0"
-          : "C_f+C_w+\\sum F'_s+\\sum F_s=0",
-        substitution: n(cf) + "+" + n(cw) + "+(" + n(cs) + ")+(" + n(tf) + ")",
-        result: "\\sum F=" + n(cf + cw + cs + tf, 6) + "\\;\\text{kN}",
-      },
-      {
-        label: "Nominal moment, strain and strength factor",
-        formula: result.sectionCase === "flange"
-          ? "M_n=-[C_c(a/2)+\\sum F_id_i]/10^6,\\quad \\varepsilon_t=0.003(d-c)/c"
-          : "M_n=-[C_w(a/2)+C_f(h_f/2)+\\sum F_id_i]/10^6,\\quad \\varepsilon_t=0.003(d-c)/c",
-        substitution: "\\varepsilon_t=" + n(result.epsilonT, 5) + ",\\quad \\phi=" + n(result.phi, 3),
-        result: "M_n=" + n(result.Mn) + "\\;\\text{kN}\\cdot\\text{m}",
-      },
-      {
-        label: "Design strength check",
-        formula: "\\phi M_n\\ge M_u",
-        substitution: n(result.phi, 3) + "(" + n(result.Mn) + ")\\ge " + n(input.Mu),
-        result: "\\phi M_n=" + n(result.phiMn) + "\\;\\text{kN}\\cdot\\text{m}\\;\\text{PASS}",
-      },
-    ];
+    );
   }
-  const caseText =
-    result.sectionCase === "flange"
-      ? "a \\le h_f\\;\\text{(compression block within flange)}"
-      : "a > h_f\\;\\text{(compression block extends into web)}";
 
-  const equilibriumFormula =
-    result.sectionCase === "flange"
-      ? "A_s f_y = 0.85 f'_c b_f a"
-      : "A_s f_y = 0.85 f'_c[b_w a+(b_f-b_w)h_f]";
+  const minTerm1 = 0.25 * Math.sqrt(input.fc) * input.bw * input.d / input.fy;
+  const minTerm2 = 1.4 * input.bw * input.d / input.fy;
+  const trialPhi = getPhi(result.targetTensionStrain, input.fy, result.Es);
+  const flangeMoment = 0.85 * input.fc * result.beff * input.hf *
+    (input.d - input.hf / 2) / 1e6;
+  const nominalDemand = input.Mu / trialPhi;
+  const requiredInFlange = nominalDemand <= flangeMoment;
+  const residualWebMoment = nominalDemand - flangeMoment;
+  const webDepth = input.d - input.hf;
+  const radical = requiredInFlange
+    ? input.d ** 2 - 2 * nominalDemand * 1e6 / (0.85 * input.fc * result.beff)
+    : webDepth ** 2 - 2 * residualWebMoment * 1e6 / (0.85 * input.fc * input.bw);
+  const demandBlockDepth = radical >= 0
+    ? (requiredInFlange ? input.d : input.hf + webDepth) - Math.sqrt(radical)
+    : null;
+  const demandSteelArea = demandBlockDepth === null ? null :
+    steelAreaAtCompressionDepth(demandBlockDepth, result.beff,
+      input.bw, input.hf, input.fc, input.fy);
+  const trialMn = result.singlyTrialPhiMn / trialPhi;
+  const trialConcreteForce = compressionForceAtDepth(
+    result.trialA, result.beff, input.bw, input.hf, input.fc
+  );
+  const trialCase = result.trialA <= input.hf ? "flange" : "web";
+  const barArea = Math.PI * input.barDiameter ** 2 / 4;
+  const compressionBarArea = Math.PI * result.compressionBarDiameter ** 2 / 4;
+  const cover = input.clearCover ?? CLEAR_COVER;
+  const stirrup = input.stirrupDiameter ?? ASSUMED_STIRRUP_DIAMETER;
+  const aggregate = input.aggregateSize ?? 19;
+  const insideWidth = input.bw - 2 * (cover + stirrup);
+  const steelLayers = [...result.tensionLayers, ...result.compressionLayers];
+  const cw = result.concreteWebForce / 1000;
+  const cf = result.concreteFlangeForce / 1000;
+  const steelForce = steelLayers.reduce((sum, layer) => sum + layer.netForce, 0) / 1000;
+  const concreteMoment = (result.concreteWebForce * result.a / 2 +
+    result.concreteFlangeForce * input.hf / 2) / 1e6;
+  const steelMoment = steelLayers.reduce((sum, layer) =>
+    sum + layer.netForce * layer.depth, 0) / 1e6;
 
-  const momentFormula =
-    result.sectionCase === "flange"
-      ? "M_n=0.85f'_c b_f a(d-a/2)"
-      : "M_n=0.85f'_c b_w a(d-a/2)+0.85f'_c(b_f-b_w)h_f(d-h_f/2)";
-
- const steps: TBeamSolutionStep[] = [
-    ...flangeSteps,
+  steps.push(
+    {
+      label: "Flange-only moment screening",
+      formula: "M_f=0.85f'_cb_fh_f(d-h_f/2)/10^6,\\quad M_{n,u}=M_u/\\phi_t",
+      substitution: "M_f=0.85(" + n(input.fc) + ")(" + n(result.beff) + ")(" +
+        n(input.hf) + ")(" + n(input.d) + "-" + n(input.hf) + "/2)/10^6,\\quad " +
+        "M_{n,u}=" + n(input.Mu) + "/" + n(trialPhi, 3),
+      result: "M_f=" + n(flangeMoment) + "\\;\\mathrm{kN}\\cdot\\mathrm{m}" +
+        (requiredInFlange ? "\\ge " : "<") + "M_{n,u}=" +
+        n(nominalDemand) + "\\;\\mathrm{kN}\\cdot\\mathrm{m}\\quad\\text{" +
+        (requiredInFlange ? "Within flange" : "Flange and web") + "}",
+    },
+    ...(requiredInFlange ? [{
+      label: "Required compression-block depth within flange",
+      formula: "M_u=\\phi_t(0.85f'_cb_fa(d-a/2))/10^6",
+      substitution: n(nominalDemand) + "=0.85(" + n(input.fc) + ")(" +
+        n(result.beff) + ")a(" + n(input.d) + "-a/2)/10^6",
+      result: demandBlockDepth === null
+        ? "\\text{No real singly reinforced block depth at the trial }\\phi"
+        : "a=" + n(demandBlockDepth) + "\\;\\mathrm{mm}\\le h_f=" +
+          n(input.hf) + "\\;\\mathrm{mm}",
+    }] : [{
+      label: "Required compression-block depth in web",
+      formula: "M_1=M_u/\\phi_t-M_f,\\quad M_1=0.85f'_cb_w(a-h_f)" +
+        "[d-h_f-(a-h_f)/2]/10^6",
+      substitution: "M_1=" + n(nominalDemand) + "-" + n(flangeMoment) +
+        "=" + n(residualWebMoment) + "=0.85(" + n(input.fc) + ")(" +
+        n(input.bw) + ")(a-" + n(input.hf) + ")(" + n(input.d) + "-" +
+        n(input.hf) + "-(a-" + n(input.hf) + ")/2)/10^6",
+      result: demandBlockDepth === null
+        ? "\\text{No real singly reinforced block depth at the trial }\\phi"
+        : "a=" + n(demandBlockDepth) + "\\;\\mathrm{mm}>h_f=" +
+          n(input.hf) + "\\;\\mathrm{mm}",
+    }]),
+    ...(demandSteelArea === null ? [] : [{
+      label: requiredInFlange ? "Required steel from flange equilibrium" :
+        "Required steel from flange and web equilibrium",
+      formula: requiredInFlange
+        ? "A_{s,\\mathrm{calc}}=0.85f'_cb_fa/f_y"
+        : "A_{s,\\mathrm{calc}}=0.85f'_c[b_fh_f+b_w(a-h_f)]/f_y",
+      substitution: requiredInFlange
+        ? "A_{s,\\mathrm{calc}}=0.85(" + n(input.fc) + ")( " +
+          n(result.beff) + ")( " + n(demandBlockDepth!) + ")/" + n(input.fy)
+        : "A_{s,\\mathrm{calc}}=0.85(" + n(input.fc) + ")[" +
+          n(result.beff) + "(" + n(input.hf) + ")+" + n(input.bw) +
+          "(" + n(demandBlockDepth!) + "-" + n(input.hf) + ")]/" + n(input.fy),
+      result: "A_{s,\\mathrm{calc}}=" + n(demandSteelArea) + "\\;\\mathrm{mm}^2" +
+        (result.sectionType === "doubly"
+          ? "\\quad\\text{(singly trial; final design verified separately)}" : ""),
+    }]),
     {
       label: "Whitney stress-block factor",
-      formula:
-        "\\beta_1=0.85-0.05\\left(\\dfrac{f'_c-28}{7}\\right),\\quad 0.65\\le\\beta_1\\le0.85",
-      substitution: `f'_c=${n(input.fc)}\\;\\text{MPa}`,
-      result: `\\beta_1=${n(result.beta1, 3)}`,
+      formula: "\\beta_1=\\min\\left(0.85,\\max\\left(0.65,0.85-0.05\\dfrac{f'_c-28}{7}\\right)\\right)",
+      substitution: "f'_c=" + n(input.fc) + "\\;\\mathrm{MPa}",
+      result: "\\beta_1=" + n(result.beta1, 3),
     },
     {
       label: "Minimum tension reinforcement",
-      formula:
-        "A_{s,min}=\\max\\left(\\dfrac{0.25\\sqrt{f'_c}}{f_y}b_wd,\\;\\dfrac{1.4}{f_y}b_wd\\right)",
-      substitution: `A_{s,min}=\\max\\left(\\dfrac{0.25\\sqrt{${n(
-        input.fc
-      )}}}{${n(input.fy)}}(${n(input.bw)})(${n(
-        input.d
-      )}),\\;\\dfrac{1.4}{${n(input.fy)}}(${n(input.bw)})(${n(
-        input.d
-      )})\\right)`,
-      result: `A_{s,min}=${n(result.asMin)}\\;\\text{mm}^2`,
+      formula: "A_{s,\\min}=\\max\\left(\\dfrac{0.25\\sqrt{f'_c}b_wd}{f_y},\\dfrac{1.4b_wd}{f_y}\\right)",
+      substitution: "A_{s,\\min}=\\max(" + n(minTerm1) + "," + n(minTerm2) + ")",
+      result: "A_{s,\\min}=" + n(result.asMin) + "\\;\\mathrm{mm}^2",
     },
     {
-      label: "Required reinforcement from strength",
-      formula: equilibriumFormula,
-      substitution: `\\phi M_n\\ge M_u,\\qquad M_u=${n(
-        input.Mu
-      )}\\;\\text{kN}\\cdot\\text{m}`,
-      result: `A_{s,calc}=${n(result.asCalculated)}\\;\\text{mm}^2`,
+      label: "Trial tension strain, neutral axis, and block depth",
+      formula: "c_t=\\dfrac{0.003d}{0.003+\\varepsilon_{t,\\mathrm{trial}}},\\quad a_t=\\beta_1c_t",
+      substitution: "c_t=\\dfrac{0.003(" + n(input.d) + ")}{0.003+" +
+        n(result.targetTensionStrain, 5) + "},\\quad a_t=" + n(result.beta1, 3) +
+        "(" + n(result.trialC) + ")",
+      result: "c_t=" + n(result.trialC) + "\\;\\mathrm{mm},\\quad a_t=" +
+        n(result.trialA) + "\\;\\mathrm{mm}",
     },
     {
-      label: "Governing required steel and selected bars",
-      formula: "A_s=\\max(A_{s,calc},A_{s,min})",
-      substitution: `A_s=\\max(${n(result.asCalculated)},${n(
-        result.asMin
-      )})`,
-      result: `A_s=${n(result.asRequired)}\\;\\text{mm}^2\\;\\rightarrow\\;${
-        result.barsRequired
-      }\\text{-}\\phi${input.barDiameter}\\;(A_{s,prov}=${n(
-        result.asProvided
-      )}\\;\\text{mm}^2)`,
+      label: "Trial flange-only or flange-plus-web assumption",
+      formula: "a_t\\le h_f\\Rightarrow C_c=0.85f'_cb_fa_t,\\quad a_t>h_f\\Rightarrow C_c=0.85f'_c[b_wa_t+(b_f-b_w)h_f]",
+      substitution: "a_t=" + n(result.trialA) + "\\;\\mathrm{mm},\\quad h_f=" +
+        n(input.hf) + "\\;\\mathrm{mm}",
+      result: "\\text{" + (trialCase === "flange" ? "Within flange" : "Flange and web") +
+        "},\\quad C_{c,t}=" + n(trialConcreteForce / 1000) + "\\;\\mathrm{kN}",
     },
     {
-      label: "Compression-block depth and section case",
-      formula: equilibriumFormula,
-      substitution: `a=${n(result.a)}\\;\\text{mm},\\qquad h_f=${n(
-        input.hf
-      )}\\;\\text{mm}`,
-      result: caseText,
+      label: "Maximum singly reinforced trial steel and moment",
+      formula: "A_{s1}=C_{c,t}/f_y,\\quad \\phi_tM_{n,t}=\\phi_tM_n(A_{s1})",
+      substitution: "A_{s1}=" + n(trialConcreteForce / 1000, 3) + "(10^3)/" +
+        n(input.fy) + ",\\quad \\phi_t=" + n(trialPhi, 3),
+      result: "A_{s1}=" + n(result.asTensionControlledMax) +
+        "\\;\\mathrm{mm}^2,\\quad M_{n,t}=" + n(trialMn) +
+        "\\;\\mathrm{kN}\\cdot\\mathrm{m},\\quad \\phi_tM_{n,t}=" +
+        n(result.singlyTrialPhiMn) + "\\;\\mathrm{kN}\\cdot\\mathrm{m}",
     },
-    {
-      label: "Tension strain and strength-reduction factor",
-      formula:
-        "c=a/\\beta_1,\\qquad \\varepsilon_t=0.003\\left(\\dfrac{d-c}{c}\\right)",
-      substitution: `c=${n(result.a)}/${n(
-        result.beta1,
-        3
-      )}=${n(result.c)}\\;\\text{mm}`,
-      result: `\\varepsilon_t=${n(result.epsilonT, 5)},\\qquad\\phi=${n(
-        result.phi,
-        3
-      )}`,
-    },
-    {
-      label: "Nominal and design moment strength",
-      formula: momentFormula,
-      substitution: `M_n=${n(result.Mn)}\\;\\text{kN}\\cdot\\text{m}`,
-      result: `\\phi M_n=${n(result.phiMn)}\\;\\text{kN}\\cdot\\text{m}\\;${
-        result.phiMn >= input.Mu ? "\\ge" : "<"
-      }\\;M_u=${n(input.Mu)}\\;\\text{kN}\\cdot\\text{m}`,
-    },
-  ];
-  if (result.tensionLayers.length > 1) {
-    const preliminaryStep = steps.find((step) => step.label === "Required reinforcement from strength");
-    if (preliminaryStep) preliminaryStep.label = "Preliminary steel at the outer tension depth";
-    const neutralAxisIndex = steps.findIndex((step) => step.label === "Compression-block depth and section case");
-    steps[neutralAxisIndex] = {
-      label: "Final neutral axis and section case",
-      formula: "C_c+\\sum F_{s,i}=0,\\quad a=\\beta_1c",
-      substitution: "c=" + n(result.c) + "\\;\\text{mm},\\quad a=" + n(result.a) +
-        "\\;\\text{mm},\\quad h_f=" + n(input.hf) + "\\;\\text{mm}",
-      result: caseText,
-    };
-    const layerSteps = result.tensionLayers.map((layer, index): TBeamSolutionStep => ({
-      label: "Tension layer " + (index + 1) + ": strain, stress and force",
-      formula: "\\varepsilon_{s,i}=0.003(c-d_i)/c,\\quad f_{s,i}=\\max(-f_y,\\min(f_y,E_s\\varepsilon_{s,i}))",
-      substitution: "d_i=" + n(layer.depth) + "\\;\\text{mm},\\quad A_{s,i}=" + n(layer.area) + "\\;\\text{mm}^2",
-      result: "\\varepsilon_{s,i}=" + n(layer.strain, 5) + ",\\quad f_{s,i}=" +
-        n(layer.stress) + "\\;\\text{MPa},\\quad F_{s,i}=" + n(layer.netForce / 1000) + "\\;\\text{kN}",
-    }));
-    steps.splice(neutralAxisIndex + 1, 0, ...layerSteps);
-    const last = steps[steps.length - 1];
-    last.formula = result.sectionCase === "flange"
-      ? "M_n=-[C_c(a/2)+\\sum F_{s,i}d_i]/10^6"
-      : "M_n=-[C_w(a/2)+C_f(h_f/2)+\\sum F_{s,i}d_i]/10^6";
+  );
+
+  if (result.sectionType === "doubly") {
+    const trialStrain = 0.003 * (result.trialC - result.dPrime) / result.trialC;
+    const eta = barFractionInBlock(result.trialA, result.dPrime, result.compressionBarDiameter);
+    const netStress = result.compressionDesignStress - 0.85 * input.fc * eta;
+    const additionalForce = result.asAdditionalTension * input.fy;
+    steps.push(
+      {
+        label: "Doubly reinforced design decision",
+        formula: "M_u\\le\\phi_tM_{n,t}\\;\\text{for a sufficient singly reinforced trial}",
+        substitution: "M_u=" + n(input.Mu) + ",\\quad \\phi_tM_{n,t}=" +
+          n(result.singlyTrialPhiMn) + "\\;\\mathrm{kN}\\cdot\\mathrm{m}",
+        result: "\\text{Adopt compression reinforcement and verify the selected layout}",
+      },
+      {
+        label: "Compression-bar depth",
+        formula: "d'=C_c+d_{st}+d'_b/2",
+        substitution: "d'=" + n(cover) + "+" + n(stirrup) + "+" +
+          n(result.compressionBarDiameter) + "/2",
+        result: "d'=" + n(result.dPrime) + "\\;\\mathrm{mm}",
+      },
+      {
+        label: "Compression steel strain and yield check",
+        formula: "\\varepsilon'_s=0.003\\dfrac{c_t-d'}{c_t},\\quad f'_s=\\min(f_y,E_s\\varepsilon'_s)",
+        substitution: "\\varepsilon'_s=0.003\\dfrac{" + n(result.trialC) + "-" +
+          n(result.dPrime) + "}{" + n(result.trialC) + "}=" + n(trialStrain, 5) +
+          ",\\quad E_s\\varepsilon'_s=" + n(result.Es * trialStrain) + "\\;\\mathrm{MPa}",
+        result: "f'_{s,t}=" + n(result.compressionDesignStress) +
+          "\\;\\mathrm{MPa},\\quad \\text{" +
+          (result.compressionDesignStress >= input.fy - 1e-9 ? "yields" : "does not yield") + "}",
+      },
+      {
+        label: "Supplementary steel couple and displaced concrete",
+        formula: "F'_s=\\max\\left(0,\\dfrac{(M_u/\\phi_t-M_{n,t})10^6}{d-d'}\\right),\\quad f'_{s,net}=f'_s-0.85f'_c\\eta",
+        substitution: "\\eta=" + n(eta, 4) + ",\\quad f'_{s,net}=" +
+          n(result.compressionDesignStress) + "-0.85(" + n(input.fc) +
+          ")(" + n(eta, 4) + ")=" + n(netStress) + "\\;\\mathrm{MPa}",
+        result: "F'_s=" + n(additionalForce / 1000) + "\\;\\mathrm{kN}",
+      },
+      {
+        label: "Calculated additional tension and compression steel",
+        formula: "A_{s2}=F'_s/f_y,\\quad A'_{s,\\mathrm{calc}}=F'_s/f'_{s,net}",
+        substitution: "A_{s2}=" + n(additionalForce) + "/" + n(input.fy) +
+          ",\\quad A'_{s,\\mathrm{calc}}=" + n(additionalForce) + "/" + n(netStress),
+        result: "A_{s2}=" + n(result.asAdditionalTension) +
+          "\\;\\mathrm{mm}^2,\\quad A'_{s,\\mathrm{calc}}=" +
+          n(result.asCompressionCalculated) + "\\;\\mathrm{mm}^2",
+      },
+      {
+        label: "Total preliminary tension steel",
+        formula: "A_{s,\\mathrm{calc}}=A_{s1}+A_{s2},\\quad A_{s,\\mathrm{trial}}=\\max(A_{s,\\mathrm{calc}},A_{s,\\min})",
+        substitution: "A_{s,\\mathrm{calc}}=" + n(result.asTensionControlledMax) +
+          "+" + n(result.asAdditionalTension),
+        result: "A_{s,\\mathrm{calc}}=" + n(result.asCalculated) +
+          "\\;\\mathrm{mm}^2\\quad\\text{(bar layout checked separately)}",
+      },
+    );
+  } else {
+    steps.push({
+      label: "Required singly reinforced steel from moment demand",
+      formula: "\\phi M_n(A_{s,\\mathrm{calc}})=M_u,\\quad A_{s,\\mathrm{req}}=\\max(A_{s,\\mathrm{calc}},A_{s,\\min})",
+      substitution: "M_u=" + n(input.Mu) +
+        "\\;\\mathrm{kN}\\cdot\\mathrm{m},\\quad A_{s,\\mathrm{calc}}=" +
+        n(result.asCalculated) + "\\;\\mathrm{mm}^2",
+      result: "A_{s,\\mathrm{req}}=\\max(" + n(result.asCalculated) +
+        "," + n(result.asMin) + ")=" + n(result.asRequired) + "\\;\\mathrm{mm}^2",
+    });
   }
+
+  steps.push({
+    label: "Selected bar areas and counts",
+    formula: "A_b=\\pi d_b^2/4,\\quad A_{s,\\mathrm{prov}}=n_sA_b" +
+      (result.sectionType === "doubly" ? ",\\quad A'_{s,\\mathrm{prov}}=n'_s\\pi d_b'^2/4" : ""),
+    substitution: "A_b=\\pi(" + n(input.barDiameter) + ")^2/4=" +
+      n(barArea, 2) + "\\;\\mathrm{mm}^2,\\quad n_s=" + result.barsRequired +
+      (result.sectionType === "doubly" ? ",\\quad A'_b=" +
+        n(compressionBarArea, 2) + "\\;\\mathrm{mm}^2,\\quad n'_s=" +
+        result.compressionBarsRequired : ""),
+    result: "A_{s,\\mathrm{prov}}=" + n(result.asProvided) +
+      "\\;\\mathrm{mm}^2" + (result.sectionType === "doubly"
+        ? ",\\quad A'_{s,\\mathrm{prov}}=" + n(result.asCompression) + "\\;\\mathrm{mm}^2" : ""),
+  });
+
+  const seismicMaximumArea = 0.025 * input.bw * input.d;
+  steps.push({
+    label: "Special moment-frame steel limit (if applicable)",
+    formula: "\\rho=A_{s,\\mathrm{prov}}/(b_wd),\\quad " +
+      "\\rho_{\\max}=0.025,\\quad A_{s,\\max}=0.025b_wd",
+    substitution: "A_{s,\\max}=0.025(" + n(input.bw) + ")( " +
+      n(input.d) + ")=" + n(seismicMaximumArea) +
+      "\\;\\mathrm{mm}^2,\\quad A_{s,\\mathrm{prov}}=" +
+      n(result.asProvided) + "\\;\\mathrm{mm}^2",
+    result: "\\rho=" + n(result.asProvided / (input.bw * input.d), 4) +
+      (result.asProvided <= seismicMaximumArea ? "\\le " : ">") +
+      "0.025\\quad\\text{" + (result.asProvided <= seismicMaximumArea
+        ? "Meets conditional limit" : "Exceeds conditional limit; revise if seismic rule applies") + "}",
+  });
+
+  steps.push({
+    label: "Web width and minimum clear spacing",
+    formula: "b_{\\mathrm{inside}}=b_w-2(C_c+d_{st}),\\quad s_{\\min}=\\max(25,d_b,4d_{agg}/3)",
+    substitution: "b_{\\mathrm{inside}}=" + n(input.bw) + "-2(" +
+      n(cover) + "+" + n(stirrup) + "),\\quad d_{agg}=" + n(aggregate) + "\\;\\mathrm{mm}",
+    result: "b_{\\mathrm{inside}}=" + n(insideWidth) +
+      "\\;\\mathrm{mm},\\quad s_{\\min}=" + n(result.minClearSpacingRequired) + "\\;\\mathrm{mm}",
+  });
+
+  for (const [role, layers] of [
+    ["Tension", result.tensionLayers],
+    ["Compression", result.compressionLayers],
+  ] as const) {
+    layers.forEach((layer, index) => {
+      const gap = layer.barCount > 1
+        ? (insideWidth - layer.barCount * layer.diameter) / (layer.barCount - 1)
+        : null;
+      steps.push({
+        label: role + " layer " + (index + 1) + ": placement and clear gap",
+        formula: "s_{\\mathrm{clear},i}=\\dfrac{b_{\\mathrm{inside}}-n_id_{b,i}}{n_i-1}\\quad(n_i>1)",
+        substitution: "n_i=" + layer.barCount + ",\\quad d_{b,i}=" +
+          n(layer.diameter) + "\\;\\mathrm{mm},\\quad d_i=" +
+          n(layer.depth) + "\\;\\mathrm{mm}",
+        result: gap === null
+          ? "\\text{Single bar in row; horizontal interbar gap not applicable}"
+          : "s_{\\mathrm{clear},i}=" + n(gap) + "\\;\\mathrm{mm}" +
+            (gap >= Math.max(25, layer.diameter, 4 * aggregate / 3) ? "\\ge " : "<") +
+            n(Math.max(25, layer.diameter, 4 * aggregate / 3)) + "\\;\\mathrm{mm}",
+      });
+    });
+  }
+
+  steps.push({
+    label: "Final neutral axis and compression-block case",
+    formula: "C_c+\\sum_iF_{s,i}=0,\\quad a=\\beta_1c",
+    substitution: "c=" + n(result.c) + "\\;\\mathrm{mm},\\quad a=" +
+      n(result.beta1, 3) + "(" + n(result.c) + ")=" + n(result.a) +
+      "\\;\\mathrm{mm},\\quad h_f=" + n(input.hf) + "\\;\\mathrm{mm}",
+    result: "\\text{" + (result.sectionCase === "flange"
+      ? "Compression block within flange" : "Compression block extends into web") + "}",
+  });
+
+  steps.push({
+    label: "Flange and web concrete resultants",
+    formula: result.sectionCase === "flange"
+      ? "C_c=0.85f'_cb_fa"
+      : "C_w=0.85f'_cb_wa,\\quad C_f=0.85f'_c(b_f-b_w)h_f",
+    substitution: result.sectionCase === "flange"
+      ? "C_c=0.85(" + n(input.fc) + ")(" + n(result.beff) +
+        ")(" + n(result.a) + ")"
+      : "C_w=0.85(" + n(input.fc) + ")(" + n(input.bw) +
+        ")(" + n(result.a) + "),\\quad C_f=0.85(" +
+        n(input.fc) + ")(" + n(result.beff - input.bw) +
+        ")(" + n(input.hf) + ")",
+    result: result.sectionCase === "flange"
+      ? "C_c=" + n(cw) + "\\;\\mathrm{kN}"
+      : "C_w=" + n(cw) + "\\;\\mathrm{kN},\\quad C_f=" +
+        n(cf) + "\\;\\mathrm{kN}",
+  });
+
+  for (const [role, layers] of [
+    ["Tension", result.tensionLayers],
+    ["Compression", result.compressionLayers],
+  ] as const) {
+    layers.forEach((layer, index) => {
+      const eta = barFractionInBlock(result.a, layer.depth, layer.diameter);
+      const yieldText = Math.abs(layer.stress) >= input.fy - 1e-9 ? "yields" : "elastic";
+      steps.push({
+        label: role + " layer " + (index + 1) + ": final strain, stress, and force",
+        formula: "\\varepsilon_{s,i}=0.003\\dfrac{c-d_i}{c},\\quad f_{s,i}=\\max(-f_y,\\min(f_y,E_s\\varepsilon_{s,i})),\\quad F_{s,i}=A_{s,i}(f_{s,i}-0.85f'_c\\eta_i)",
+        substitution: "d_i=" + n(layer.depth) + "\\;\\mathrm{mm},\\quad A_{s,i}=" +
+          n(layer.area) + "\\;\\mathrm{mm}^2,\\quad \\eta_i=" + n(eta, 4) +
+          ",\\quad \\varepsilon_{s,i}=" + n(layer.strain, 5),
+        result: "f_{s,i}=" + n(layer.stress) + "\\;\\mathrm{MPa},\\quad F_{s,i}=" +
+          n(layer.netForce / 1000) + "\\;\\mathrm{kN},\\quad \\text{" + yieldText + "}",
+      });
+    });
+  }
+
+  steps.push(
+    {
+      label: "Final force equilibrium",
+      formula: "C_c+\\sum_iF_{s,i}=0",
+      substitution: result.sectionCase === "flange"
+        ? n(cw) + "+(" + n(steelForce) + ")"
+        : n(cw) + "+" + n(cf) + "+(" + n(steelForce) + ")",
+      result: "\\sum F=" + n(cw + cf + steelForce, 6) + "\\;\\mathrm{kN}",
+    },
+    {
+      label: "Extreme tension strain and strength-reduction factor",
+      formula: "\\varepsilon_t=0.003\\dfrac{d-c}{c},\\quad \\phi=\\begin{cases}0.65&\\varepsilon_t\\le\\varepsilon_y\\\\0.65+0.25\\dfrac{\\varepsilon_t-\\varepsilon_y}{0.005-\\varepsilon_y}&\\varepsilon_y<\\varepsilon_t<0.005\\\\0.90&\\varepsilon_t\\ge0.005\\end{cases}",
+      substitution: "\\varepsilon_y=f_y/E_s=" + n(input.fy) + "/" +
+        n(result.Es) + "=" + n(input.fy / result.Es, 5) +
+        ",\\quad \\varepsilon_t=0.003\\dfrac{" + n(input.d) +
+        "-" + n(result.c) + "}{" + n(result.c) + "}",
+      result: "\\varepsilon_t=" + n(result.epsilonT, 5) +
+        ",\\quad \\phi=" + n(result.phi, 3),
+    },
+    {
+      label: "Nominal moment strength from the final force system",
+      formula: result.sectionCase === "flange"
+        ? "M_n=-\\dfrac{C_c(a/2)+\\sum_iF_{s,i}d_i}{10^6}"
+        : "M_n=-\\dfrac{C_w(a/2)+C_f(h_f/2)+\\sum_iF_{s,i}d_i}{10^6}",
+      substitution: "M_n=-[" + n(concreteMoment) + "+(" +
+        n(steelMoment) + ")]\\;\\mathrm{kN}\\cdot\\mathrm{m}",
+      result: "M_n=" + n(result.Mn) + "\\;\\mathrm{kN}\\cdot\\mathrm{m}",
+    },
+    {
+      label: "Design moment and final status",
+      formula: "\\phi M_n\\ge M_u",
+      substitution: "\\phi M_n=" + n(result.phi, 3) + "(" +
+        n(result.Mn) + ")=" + n(result.phiMn) +
+        "\\;\\mathrm{kN}\\cdot\\mathrm{m},\\quad M_u=" +
+        n(input.Mu) + "\\;\\mathrm{kN}\\cdot\\mathrm{m}",
+      result: "\\phi M_n" + (result.phiMn >= input.Mu ? "\\ge " : "<") +
+        "M_u\\quad\\text{" + (result.ok ? "DESIGN PASSES" : "REVISE DESIGN") + "}",
+    },
+  );
+
   return steps;
 }

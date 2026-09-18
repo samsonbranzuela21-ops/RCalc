@@ -44,10 +44,18 @@ test('design solution shows every doubly reinforced calculation and final verifi
   const rhoStep = solution.find(step => step.label === 'Required singly reinforced ratio');
   const tensionBarCountStep = solution.find(step => step.label === 'Tension-bar area, rounding, and provided area');
   const compressionBarCountStep = solution.find(step => step.label === 'Compression-bar area, rounding, and provided area');
-  close(result.asCompression, result.asAdditionalTension * input.fy / result.fsPrimeDesign);
-  assert.match(compressionAreaStep.formula, /A'_s=\\dfrac\{A_\{s2\}f_y\}\{f'_\{s,design\}\}/);
+  const a1 = result.asSinglyPortion * input.fy / (0.85 * input.fc * input.b);
+  const dTrial = input.h - input.cover - input.stirrupDiameter - input.barDiameter / 2;
+  const dPrimeTrial = input.cover + input.stirrupDiameter + input.compressionBarDiameter / 2;
+  close(result.mnSingly, result.asSinglyPortion * input.fy * (dTrial - a1 / 2) / 1e6);
+  close(result.mnRemaining, result.requiredMn - result.mnSingly);
+  close(result.asAdditionalTension, result.mnRemaining * 1e6 /
+    (input.fy * (dTrial - dPrimeTrial)));
+  const netCompressionStress = result.fsPrimeDesign - (dPrimeTrial <= a1 ? 0.85 * input.fc : 0);
+  close(result.asCompression, result.asAdditionalTension * input.fy / netCompressionStress);
+  assert.match(compressionAreaStep.formula, /A'_s=\\dfrac\{A_\{s2\}f_y\}\{f'_\{s,net\}\}/);
   assert.ok(compressionAreaStep.substitution.includes(result.asAdditionalTension.toFixed(2)));
-  assert.ok(compressionAreaStep.substitution.includes(result.fsPrimeDesign.toFixed(2)));
+  assert.ok(compressionAreaStep.substitution.includes(netCompressionStress.toFixed(2)));
   assert.ok(compressionAreaStep.substitution.includes(result.asCompression.toFixed(2)));
   assert.match(compressionStrainStep.formula, /0\.003\\times\\dfrac\{c_\{design\}-d'\}\{c_\{design\}\}/);
   assert.doesNotMatch(compressionStrainStep.formula, /0\.003dfrac/);
@@ -176,7 +184,7 @@ test('an infeasible bar count reports concise code-based layout limits, not the 
   assert.equal(result.failureType, 'layout');
   assert.match(result.message, /Not adequate/);
   assert.doesNotMatch(result.message, /bounded at|T .*\/C|bar-count increments/);
-  assert.ok(result.iterationRows.some(row => row.reason.includes('section allows at most')));
+  assert.match(result.failureDetails, /needs at least .* section can hold at most/);
   const iterationStep = getSolutionSteps(input, result).find(step => step.label === 'Iteration record');
   assert.doesNotMatch(iterationStep.explanation, /Trial \d+:/);
 });
@@ -218,7 +226,39 @@ test('Problem 27 checks bar counts and rechecks phi from final strain', () => {
   assert.ok(result.spacingOk && result.compressionSpacingOk && result.geometryOk);
 });
 
-test('a layered design distinguishes the area-based five-bar count from its adopted six-bar layout', () => {
+test('doubly design can recover from an over-reinforced singly bar-count trial', () => {
+  const input = problem(175, { b: 200, h: 450, stirrupDiameter: 10,
+    barDiameter: 20, compressionBarDiameter: 20 });
+  const result = designSinglyReinforcedBeam(input);
+  assert.equal(result.ok, true, result.message);
+  assert.equal(result.sectionType, 'doubly');
+  assert.ok(result.barsRequired < 6);
+  assert.ok(result.phiMn >= input.Mu);
+  assert.ok(result.rhoProvided <= 0.025);
+  assert.ok(result.compressionLayers.every(layer => layer.state === 'compression'));
+});
+
+test('a detail-limited singly trial can reserve moment for a valid steel couple', () => {
+  const input = problem(200, { b: 200, h: 500, stirrupDiameter: 10,
+    barDiameter: 12, compressionBarDiameter: 20 });
+  const result = designSinglyReinforcedBeam(input);
+  assert.equal(result.ok, true, result.message);
+  assert.equal(result.sectionType, 'doubly');
+  assert.ok(result.mnRemaining > 0);
+  assert.ok(result.phiMn >= input.Mu);
+  assert.ok(result.compressionBarsRequired > 0);
+});
+
+test('an over-limit doubly trial reports the ratio check instead of a later bar-fit trial', () => {
+  const input = problem(200, { b: 200, h: 450, stirrupDiameter: 10,
+    barDiameter: 16, compressionBarDiameter: 20 });
+  const result = designSinglyReinforcedBeam(input);
+  assert.equal(result.ok, false);
+  assert.equal(result.failureType, 'reinforcement-limit');
+  assert.match(result.failureDetails, /can carry Mu.*exceeds ρmax=0.025/);
+});
+
+test('a doubly design can adopt the sufficient five-bar layout without inheriting the singly bar count', () => {
   const input = problem(520, {
     b: 300, h: 600, cover: 40, stirrupDiameter: 10, aggregateSize: 19,
     barDiameter: 28, compressionBarDiameter: 20,
@@ -229,12 +269,10 @@ test('a layered design distinguishes the area-based five-bar count from its adop
 
   assert.equal(result.ok, true);
   assert.equal(Math.ceil(result.barsBeforeRounding - 1e-10), 5);
-  assert.equal(result.barsRequired, 6);
-  assert.deepEqual(result.tensionBarsPerLayer, [4, 2]);
+  assert.equal(result.barsRequired, 5);
+  assert.deepEqual(result.tensionBarsPerLayer, [4, 1]);
   assert.ok(result.phiMn >= input.Mu);
-  assert.match(barStep.result, /estimate rounds up to 5 bars/);
-  assert.match(barStep.result, /adopted 6-bar layout/);
-  assert.match(barStep.explanation, /centroid toward the compression face and reduce d/);
+  assert.match(barStep.result, /Adopt 5 bottom bars/);
 });
 
 test('an optional target tension strain derives c and changes the strain-based design trial', () => {
@@ -301,7 +339,7 @@ test('rho max is fixed at the cited code limit and stays distinct from phi', () 
   assert.ok(!JSON.stringify(result.warnings).includes('Module 4'));
 });
 
-test('rho max rejects a rounded bar layout that exceeds the limit while required steel fits', () => {
+test('rho max rejects an over-limit singly layout but allows a valid doubly redesign', () => {
   const input = problem(145, {
     b: 200, h: 450, stirrupDiameter: 10, barDiameter: 12, compressionBarDiameter: 12,
   });
@@ -314,7 +352,10 @@ test('rho max rejects a rounded bar layout that exceeds the limit while required
   const roundedProvidedRatio = area(trialBars, input.barDiameter) / (input.b * rejectedTrial.d);
   assert.ok(requiredRatio <= result.rhoMax);
   assert.ok(roundedProvidedRatio > result.rhoMax);
-  assert.equal(result.ok, false);
+  assert.equal(result.ok, true);
+  assert.equal(result.sectionType, 'doubly');
+  assert.ok(result.rhoProvided <= result.rhoMax);
+  assert.ok(result.phiMn >= input.Mu);
 });
 
 test('legacy effective-depth callers retain d instead of having it reinterpreted as h', () => {

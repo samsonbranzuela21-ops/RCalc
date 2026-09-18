@@ -88,6 +88,9 @@ test("given flange width also feeds the doubly reinforced design and manual solu
   const steps = getTBeamSolutionSteps(input, result);
   assert.equal(steps[0].label, "Given effective flange width");
   assert.ok(steps.some((step) => step.label === "Compression steel strain and yield check"));
+  for (const step of steps) for (const math of [step.formula, step.substitution, step.result].filter(Boolean)) {
+    assert.doesNotThrow(() => katex.renderToString(math, { throwOnError: true }), step.label);
+  }
 });
 
 test("calculated T flange width requires both positive clear spacings", () => {
@@ -102,6 +105,55 @@ test("a modest T-beam demand remains singly reinforced without compression steel
   assert.ok(result.ok, result.message);
 });
 
+test("manual singly design screens flange moment and solves the flange block", () => {
+  const input = { ...base, Mu: 120 };
+  const result = designTBeam(input);
+  const steps = getTBeamSolutionSteps(input, result);
+  const screening = steps.find((step) => step.label === "Flange-only moment screening");
+  const block = steps.find((step) => step.label === "Required compression-block depth within flange");
+  const steel = steps.find((step) => step.label === "Required steel from flange equilibrium");
+  assert.ok(screening);
+  assert.ok(block);
+  assert.ok(steel);
+  assert.match(screening.result, /Within flange/);
+  assert.match(block.formula, /b_f/);
+  assert.match(steel.formula, /b_fa/);
+  const bf = base.bw + base.clearSpacingLeft / 2 + base.clearSpacingRight / 2;
+  const nominal = input.Mu / 0.9;
+  const a = input.d - Math.sqrt(input.d ** 2 - 2 * nominal * 1e6 / (0.85 * input.fc * bf));
+  const As = 0.85 * input.fc * bf * a / input.fy;
+  assert.match(block.result, new RegExp(`a=${a.toFixed(2)}`));
+  assert.match(steel.result, new RegExp(`A_\\{s,\\\\mathrm\\{calc\\}\\}=${As.toFixed(2)}`));
+});
+
+test("manual singly design re-solves the web beyond flange-only strength", () => {
+  const input = { ...base, Mu: 270 };
+  const result = designTBeam(input);
+  const steps = getTBeamSolutionSteps(input, result);
+  const screening = steps.find((step) => step.label === "Flange-only moment screening");
+  const block = steps.find((step) => step.label === "Required compression-block depth in web");
+  const steel = steps.find((step) => step.label === "Required steel from flange and web equilibrium");
+  assert.ok(screening);
+  assert.ok(block);
+  assert.ok(steel);
+  assert.match(screening.result, /Flange and web/);
+  assert.match(block.formula, /M_1/);
+  assert.match(steel.formula, /b_fh_f\+b_w/);
+  const bf = base.bw + base.clearSpacingLeft / 2 + base.clearSpacingRight / 2;
+  const Mf = 0.85 * input.fc * bf * input.hf * (input.d - input.hf / 2) / 1e6;
+  const M1 = input.Mu / 0.9 - Mf;
+  const x = (input.d - input.hf) - Math.sqrt((input.d - input.hf) ** 2 -
+    2 * M1 * 1e6 / (0.85 * input.fc * input.bw));
+  const a = input.hf + x;
+  const As = 0.85 * input.fc * (bf * input.hf + input.bw * x) / input.fy;
+  assert.match(block.result, new RegExp(`a=${a.toFixed(2)}`));
+  assert.ok(steel.result.includes(`=${As.toFixed(2)}`));
+  for (const step of [screening, block, steel]) {
+    for (const math of [step.formula, step.substitution, step.result].filter(Boolean))
+      assert.doesNotThrow(() => katex.renderToString(math, { throwOnError: true }), step.label);
+  }
+});
+
 test("doubly reinforced flange-only case checks elastic compression steel", () => {
   const input = { ...base, hf: 160, Mu: 750 };
   const result = designTBeam(input);
@@ -114,6 +166,11 @@ test("doubly reinforced flange-only case checks elastic compression steel", () =
     [...result.tensionLayers, ...result.compressionLayers].reduce((sum, layer) => sum + layer.netForce, 0);
   close(net, 0);
   assert.ok(result.phiMn >= input.Mu);
+  const labels = getTBeamSolutionSteps(input, result).map((step) => step.label);
+  for (const label of ["Minimum tension reinforcement", "Trial flange-only or flange-plus-web assumption",
+    "Supplementary steel couple and displaced concrete", "Final force equilibrium",
+    "Extreme tension strain and strength-reduction factor", "Nominal moment strength from the final force system",
+    "Design moment and final status"]) assert.ok(labels.includes(label), label);
 });
 
 test("high-demand web case detects yielding compression reinforcement", () => {
@@ -131,8 +188,8 @@ test("multiple singly reinforced rows use actual layer depths in the manual solu
   assert.equal(result.sectionType, "singly");
   assert.ok(result.tensionLayers.length > 1);
   const steps = getTBeamSolutionSteps(input, result);
-  assert.ok(steps.some((step) => step.label === "Tension layer 2: strain, stress and force"));
-  assert.ok(steps.at(-1).formula.includes("\\sum F_{s,i}d_i"));
+  assert.ok(steps.some((step) => step.label === "Tension layer 2: final strain, stress, and force"));
+  assert.ok(steps.some((step) => step.label === "Nominal moment strength from the final force system"));
   for (const step of steps) for (const math of [step.formula, step.substitution, step.result].filter(Boolean)) {
     assert.doesNotThrow(() => katex.renderToString(math, { throwOnError: true }), step.label);
   }
